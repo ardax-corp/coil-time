@@ -1,0 +1,13 @@
+[package]
+name = "time"
+version = "0.1.0"
+
+[module]
+roots = ["./src"]
+
+[ffi]
+search_paths = ["./native"]
+allow = ["time"]
+
+[dependencies]
+time = { git = "https://github.com/ardax-corp/coil-time.git", trusted = true }
