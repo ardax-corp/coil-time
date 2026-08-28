@@ -1,7 +1,7 @@
 //! C ABI for coil-time (`coil_time_*`).
 //!
-//! Port of coil-lang `machine/src/time.rs` (TIME_WIRING, 16 ops) plus Instant
-//! `drop`. Instants are opaque `int` handles into a process-global HashMap.
+//! Port of coil-lang `machine/src/time.rs` (16 ops) plus Instant `drop`.
+//! Instants are opaque `int` handles into a process-global HashMap.
 
 use chrono::{DateTime, Months, NaiveDate, NaiveDateTime, TimeDelta, Utc};
 use std::cell::Cell;
