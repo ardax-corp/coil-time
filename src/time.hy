@@ -1,5 +1,5 @@
 // Userland time — FFI to native/libtime.{so,dylib,dll} (dload("time")).
-// Surface names match TIME_WIRING. Instant handles live in the .so.
+// Instant handles live in the .so.
 // Instant.drop removes the handle; missing/invalid is TimeError::InvalidInput.
 //
 // err_out is never a Coil array: pass coil_time_null() and read

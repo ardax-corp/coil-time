@@ -17,7 +17,7 @@ const OTHER: i64 = 3;
 const RC_ERR: i64 = -1;
 const RC_OK: i64 = 0;
 
-/// Same 16 names and arities as coil-lang `TIME_WIRING` (without the `time_` prefix).
+/// Sixteen package names and arities (without a `time_` prefix).
 const PACKAGE_TIME_WIRING: &[(&str, usize)] = &[
     ("timestamp", 0),
     ("sleep_ms", 1),

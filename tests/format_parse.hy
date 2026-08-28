@@ -1,4 +1,4 @@
-// Format / parse roundtrip matches virtual TIME_WIRING (2024-01-01 UTC).
+// Format / parse roundtrip (2024-01-01 UTC).
 use time::{parse, format, TimeError, Timestamp};
 
 fn must_ts(Result<Timestamp, TimeError> r) -> Timestamp {
