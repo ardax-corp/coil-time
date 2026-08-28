@@ -108,26 +108,24 @@ fn copy_out(ptr p, int n) -> Vec<byte> {
 }
 
 fn take_timestamp() -> Timestamp {
-    return new Timestamp(
-        coil_time_field(0),
-        coil_time_field(1),
-        coil_time_field(2),
-        coil_time_field(3),
-    );
+    let secs = coil_time_field(0);
+    let millis = coil_time_field(1);
+    let micros = coil_time_field(2);
+    let nanos = coil_time_field(3);
+    return new Timestamp(secs, millis, micros, nanos);
 }
 
 fn take_period() -> Period {
-    return new Period(
-        coil_time_field(0),
-        coil_time_field(1),
-        coil_time_field(2),
-        coil_time_field(3),
-        coil_time_field(4),
-        coil_time_field(5),
-        coil_time_field(6),
-        coil_time_field(7),
-        coil_time_field(8),
-    );
+    let years = coil_time_field(0);
+    let months = coil_time_field(1);
+    let days = coil_time_field(2);
+    let hours = coil_time_field(3);
+    let minutes = coil_time_field(4);
+    let secs = coil_time_field(5);
+    let millis = coil_time_field(6);
+    let micros = coil_time_field(7);
+    let nanos = coil_time_field(8);
+    return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
 }
 
 fn put_period(Period p) {
@@ -303,7 +301,7 @@ fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
 impl Instant {
     fn drop() {
         if self.live {
-            coil_time_instant_drop(self.handle, err_ptr());
+            coil_time_instant_drop(self.handle, coil_time_null());
             self.live = false;
         }
     }
