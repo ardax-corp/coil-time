@@ -53,6 +53,18 @@ test("negative handle is InvalidInput") {
     expect_invalid(elapsed_nanos(inst));
 }
 
+test("unregistered handle is InvalidInput") {
+    let inst = new Instant(1000000009, true);
+    expect_invalid(elapsed_nanos(inst));
+    expect_invalid(elapsed_millis(inst));
+}
+
+test("drop missing handle is not a panic") {
+    let inst = new Instant(1000000009, true);
+    inst.drop();
+    assert(inst.live == false)?;
+}
+
 fn ephemeral_instant() {
     let _i = instant_now();
 }
