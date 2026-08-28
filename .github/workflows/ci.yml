@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: "true"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: coil-time
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ardax-corp/coil-lang
+          path: coil-lang
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libffi
+        run: sudo apt-get update && sudo apt-get install -y libffi-dev
+
+      - name: Native tests
+        working-directory: coil-time/native
+        run: cargo test
+
+      - name: Native release build
+        working-directory: coil-time/native
+        run: cargo build --release
+
+      - name: Place libtime.so on FFI search path
+        working-directory: coil-time
+        run: cp native/target/release/libtime.so native/
+
+      - name: Build coil
+        working-directory: coil-lang
+        # Default features include virtual `time`, which shadows this package.
+        run: cargo build --no-default-features
+
+      - name: Coil tests
+        working-directory: coil-time
+        run: ../coil-lang/target/debug/coil test
