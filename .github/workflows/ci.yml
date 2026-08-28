@@ -10,7 +10,25 @@ env:
   CI: "true"
 
 jobs:
-  test:
+  native:
+    name: native
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Test
+        run: cargo test
+
+      - name: Release cdylib
+        run: cargo build --release
+
+  coil:
+    name: coil test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +45,6 @@ jobs:
       - name: Install libffi
         run: sudo apt-get update && sudo apt-get install -y libffi-dev
 
-      - name: Native tests
-        working-directory: coil-time/native
-        run: cargo test
-
       - name: Native release build
         working-directory: coil-time/native
         run: cargo build --release
@@ -42,7 +56,7 @@ jobs:
       - name: Build coil
         working-directory: coil-lang
         # Default features include virtual `time`, which shadows this package.
-        run: cargo build --no-default-features
+        run: cargo build -p coil --no-default-features
 
       - name: Coil tests
         working-directory: coil-time
