@@ -55,8 +55,7 @@ jobs:
 
       - name: Build coil
         working-directory: coil-lang
-        # Default features include virtual `time`, which shadows this package.
-        run: cargo build -p coil --no-default-features
+        run: cargo build -p coil
 
       - name: Coil tests
         working-directory: coil-time
