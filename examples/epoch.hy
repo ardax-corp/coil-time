@@ -1,0 +1,15 @@
+use time::{epoch};
+use io::{stdout};
+use io::sync::{write_all};
+use string::{format, to_bytes};
+
+fn epoch_ok() -> int {
+    return match epoch() {
+        Result::Ok(t) => t.nanos,
+        Result::Err(e) => -1,
+    };
+}
+
+fn main() {
+    write_all(stdout(), to_bytes(format("%i", epoch_ok())));
+}
