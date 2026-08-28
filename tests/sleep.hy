@@ -1,4 +1,4 @@
-// sleep_ms: negative is InvalidInput. Zero is not a dedicated test (VM stack panic).
+// sleep_ms: negative is InvalidInput. Zero is in tests/wiring.hy.
 use time::{sleep_ms, TimeError};
 
 test("sleep_ms negative is InvalidInput") {
