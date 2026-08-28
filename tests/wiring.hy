@@ -69,6 +69,7 @@ test("sixteen names at TIME_WIRING arity") {
     let _from_p = must_ts(date_from_period(cal));
     let from_epoch = must_ts(date_from_epoch_period(day));
     assert(from_epoch.secs == 86400)?;
+    assert(from_epoch.nanos == 86400 * 1000000000)?;
     let parsed = must_ts(parse("2024-01-01 00:00:00", "%Y-%m-%d %H:%M:%S"));
     let s = match format(parsed, "%Y-%m-%d %H:%M:%S") {
         Result::Ok(t) => t,
@@ -88,5 +89,5 @@ test("date_from_epoch_period is epoch plus period") {
     let p = must_p(period(0, 0, 1, 0, 0, 0, 0, 0, 0));
     let ts = must_ts(date_from_epoch_period(p));
     assert(ts.secs == 86400)?;
-    assert(ts.nanos == 86400000000000)?;
+    assert(ts.nanos == 86400 * 1000000000)?;
 }

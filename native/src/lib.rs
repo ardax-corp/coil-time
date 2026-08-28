@@ -725,6 +725,18 @@ mod tests {
     }
 
     #[test]
+    fn period_add_overflow_is_overflow_tag() {
+        unsafe {
+            coil_time_period(i64::MAX, 0, 0, 0, 0, 0, 0, 0, 0, err_ptr());
+            coil_time_period_hold();
+            coil_time_period(1, 0, 0, 0, 0, 0, 0, 0, 0, err_ptr());
+            let rc = coil_time_period_add(err_ptr());
+            assert_eq!(rc, RC_ERR);
+            assert_eq!(coil_time_last_error(), TimeErrorTag::Overflow as i64);
+        }
+    }
+
+    #[test]
     fn date_from_period_rejects_zero_month_and_instant_invalid() {
         unsafe {
             coil_time_period(2024, 0, 1, 0, 0, 0, 0, 0, 0, err_ptr());
