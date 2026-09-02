@@ -129,15 +129,24 @@ fn take_period() -> Period {
 }
 
 fn put_period(Period p) {
-    coil_time_store_i64(0, p.years());
-    coil_time_store_i64(1, p.months());
-    coil_time_store_i64(2, p.days());
-    coil_time_store_i64(3, p.hours());
-    coil_time_store_i64(4, p.minutes());
-    coil_time_store_i64(5, p.secs());
-    coil_time_store_i64(6, p.millis());
-    coil_time_store_i64(7, p.micros());
-    coil_time_store_i64(8, p.nanos());
+    let years = p.years();
+    let months = p.months();
+    let days = p.days();
+    let hours = p.hours();
+    let minutes = p.minutes();
+    let secs = p.secs();
+    let millis = p.millis();
+    let micros = p.micros();
+    let nanos = p.nanos();
+    coil_time_store_i64(0, years);
+    coil_time_store_i64(1, months);
+    coil_time_store_i64(2, days);
+    coil_time_store_i64(3, hours);
+    coil_time_store_i64(4, minutes);
+    coil_time_store_i64(5, secs);
+    coil_time_store_i64(6, millis);
+    coil_time_store_i64(7, micros);
+    coil_time_store_i64(8, nanos);
 }
 
 fn timestamp() -> Result<Timestamp, TimeError> {
@@ -181,7 +190,8 @@ fn period(int years, int months, int days, int hours, int minutes, int secs, int
 
 fn add(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
     put_period(p);
-    let rc = coil_time_add(ts.nanos(), err_ptr());
+    let nanos = ts.nanos();
+    let rc = coil_time_add(nanos, err_ptr());
     if rc < 0 {
         raise err_from(coil_time_last_error());
     }
@@ -190,7 +200,8 @@ fn add(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
 
 fn sub(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
     put_period(p);
-    let rc = coil_time_sub(ts.nanos(), err_ptr());
+    let nanos = ts.nanos();
+    let rc = coil_time_sub(nanos, err_ptr());
     if rc < 0 {
         raise err_from(coil_time_last_error());
     }
