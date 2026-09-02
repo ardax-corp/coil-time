@@ -162,11 +162,17 @@ fn instant_now() -> Instant {
 }
 
 fn elapsed_nanos(Instant inst) -> Result<int, TimeError> {
-    return inst.elapsed_nanos();
+    return match inst.elapsed_nanos() {
+        Result::Ok(n) => n,
+        Result::Err(e) => raise e,
+    };
 }
 
 fn elapsed_millis(Instant inst) -> Result<int, TimeError> {
-    return inst.elapsed_millis();
+    return match inst.elapsed_millis() {
+        Result::Ok(n) => n,
+        Result::Err(e) => raise e,
+    };
 }
 
 fn period(int years, int months, int days, int hours, int minutes, int secs, int millis, int micros, int nanos) -> Result<Period, TimeError> {
@@ -347,7 +353,7 @@ impl Period {
 }
 
 impl Instant {
-    pub fn elapsed_nanos() -> int {
+    pub fn elapsed_nanos() -> Result<int, TimeError> {
         let n = coil_time_elapsed_nanos(self.handle, err_ptr());
         if n < 0 {
             raise err_from(coil_time_last_error());
@@ -355,7 +361,7 @@ impl Instant {
         return n;
     }
 
-    pub fn elapsed_millis() -> int {
+    pub fn elapsed_millis() -> Result<int, TimeError> {
         let n = coil_time_elapsed_millis(self.handle, err_ptr());
         if n < 0 {
             raise err_from(coil_time_last_error());
