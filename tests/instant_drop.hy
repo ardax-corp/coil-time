@@ -7,7 +7,7 @@ fn expect_invalid(Result<int, TimeError> r) {
         Result::Ok(_) => panic "expected InvalidInput",
         Result::Err(e) => match e {
             TimeError::InvalidInput => {},
-            _ => panic "wrong error",
+            default => panic "wrong error",
         },
     };
 }

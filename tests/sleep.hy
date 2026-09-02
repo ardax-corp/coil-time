@@ -6,7 +6,7 @@ test("sleep_ms negative is InvalidInput") {
         Result::Ok(_) => panic "expected InvalidInput",
         Result::Err(e) => match e {
             TimeError::InvalidInput => {},
-            _ => panic "wrong error",
+            default => panic "wrong error",
         },
     };
 }
