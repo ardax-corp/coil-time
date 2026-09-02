@@ -23,7 +23,6 @@ extern "time" {
     fn coil_time_instant_drop(int handle, ptr err_out) -> int;
     fn coil_time_elapsed_nanos(int handle, ptr err_out) -> int;
     fn coil_time_elapsed_millis(int handle, ptr err_out) -> int;
-    fn coil_time_period(int years, int months, int days, int hours, int minutes, int secs, int millis, int micros, int nanos, ptr err_out) -> int;
     fn coil_time_period_hold() -> int;
     fn coil_time_add(int ts_nanos, ptr err_out) -> int;
     fn coil_time_sub(int ts_nanos, ptr err_out) -> int;
@@ -33,7 +32,8 @@ extern "time" {
     fn coil_time_date_from_period(ptr err_out) -> int;
     fn coil_time_date_from_epoch_period(ptr err_out) -> int;
     fn coil_time_epoch(ptr err_out) -> int;
-    fn coil_time_format(int ts_nanos, ptr fmt, int fmt_len, ptr out, int out_len, ptr err_out) -> int;
+    fn coil_time_format_hold(ptr fmt, int fmt_len, ptr out, int out_len) -> int;
+    fn coil_time_format_apply(int ts_nanos, ptr err_out) -> int;
     fn coil_time_parse(ptr text, int text_len, ptr fmt, int fmt_len, ptr err_out) -> int;
 }
 
@@ -176,11 +176,7 @@ fn elapsed_millis(Instant inst) -> Result<int, TimeError> {
 }
 
 fn period(int years, int months, int days, int hours, int minutes, int secs, int millis, int micros, int nanos) -> Result<Period, TimeError> {
-    let rc = coil_time_period(years, months, days, hours, minutes, secs, millis, micros, nanos, err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_period();
+    return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
 }
 
 fn add(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
@@ -263,7 +259,9 @@ fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
     let src = copy_in(fb);
     let cap = 256;
     let out = coil_time_alloc(cap);
-    let rc = coil_time_format(ts.nanos(), src, fmt_n, out, cap, err_ptr());
+    let nanos = ts.nanos();
+    coil_time_format_hold(src, fmt_n, out, cap);
+    let rc = coil_time_format_apply(nanos, err_ptr());
     let n = rc;
     if rc < 0 {
         n = 0;
