@@ -35,7 +35,7 @@ Coil tests need a sibling `coil` on `PATH` (coil-lang default features are empty
 ```bash
 # sibling coil-lang
 cargo build -p coil
-../coil-lang/target/debug/coil test --allow-dload time
+make coil-test COIL=../coil-lang/target/debug/coil
 ```
 
 Consume from a sibling checkout or a `coil.lock` pin (`rev` + `content_hash`). See [docs/consume.md](docs/consume.md).
