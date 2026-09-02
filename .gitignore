@@ -4,3 +4,4 @@
 *.dll
 *.hyc
 target/
+coil.lock
