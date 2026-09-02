@@ -11,10 +11,26 @@ use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant as StdInstant};
 
+#[derive(Clone, Copy)]
+struct FormatHold {
+    fmt: *const u8,
+    fmt_len: u64,
+    out: *mut u8,
+    out_len: u64,
+}
+
 thread_local! {
     static LAST_ERROR: Cell<i64> = const { Cell::new(0) };
     static LAST_I64: Cell<i64> = const { Cell::new(0) };
     static FIELDS: Cell<[i64; 9]> = const { Cell::new([0; 9]) };
+    static FORMAT_HOLD: Cell<FormatHold> = const {
+        Cell::new(FormatHold {
+            fmt: std::ptr::null(),
+            fmt_len: 0,
+            out: std::ptr::null_mut(),
+            out_len: 0,
+        })
+    };
 }
 
 /// Error tags (same order as userland `TimeError` / virtual `TimeErrorTag`).
@@ -593,6 +609,31 @@ pub unsafe extern "C" fn coil_time_epoch(err_out: *mut i64) -> i64 {
     LAST_ERROR.with(|c| c.set(0));
     let _ = err_out;
     RC_OK
+}
+
+/// Coil FFI arity stays small: hold buffers, then apply. Native tests still use the 6-arg form.
+#[no_mangle]
+pub unsafe extern "C" fn coil_time_format_hold(
+    fmt: *const u8,
+    fmt_len: u64,
+    out: *mut u8,
+    out_len: u64,
+) -> i64 {
+    FORMAT_HOLD.with(|c| {
+        c.set(FormatHold {
+            fmt,
+            fmt_len,
+            out,
+            out_len,
+        });
+    });
+    RC_OK
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn coil_time_format_apply(ts_nanos: i64, err_out: *mut i64) -> i64 {
+    let h = FORMAT_HOLD.with(|c| c.get());
+    unsafe { coil_time_format(ts_nanos, h.fmt, h.fmt_len, h.out, h.out_len, err_out) }
 }
 
 #[no_mangle]

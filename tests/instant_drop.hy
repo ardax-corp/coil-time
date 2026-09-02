@@ -7,7 +7,7 @@ fn expect_invalid(Result<int, TimeError> r) {
         Result::Ok(_) => panic "expected InvalidInput",
         Result::Err(e) => match e {
             TimeError::InvalidInput => {},
-            _ => panic "wrong error",
+            default => panic "wrong error",
         },
     };
 }
@@ -29,7 +29,7 @@ test("instant elapsed after now is non-negative") {
 test("drop then elapsed is InvalidInput") {
     let inst = instant_now();
     inst.drop();
-    assert(inst.live == false)?;
+    assert(inst.is_live() == false)?;
     expect_invalid(elapsed_nanos(inst));
     expect_invalid(elapsed_millis(inst));
 }
@@ -38,7 +38,7 @@ test("drop is idempotent at Instant") {
     let inst = instant_now();
     inst.drop();
     inst.drop();
-    assert(inst.live == false)?;
+    assert(inst.is_live() == false)?;
     expect_invalid(elapsed_nanos(inst));
 }
 
@@ -62,7 +62,7 @@ test("unregistered handle is InvalidInput") {
 test("drop missing handle is not a panic") {
     let inst = new Instant(1000000009, true);
     inst.drop();
-    assert(inst.live == false)?;
+    assert(inst.is_live() == false)?;
 }
 
 fn ephemeral_instant() {
@@ -79,6 +79,6 @@ test("explicit drop then collect") {
     let inst = instant_now();
     inst.drop();
     collect();
-    assert(inst.live == false)?;
+    assert(inst.is_live() == false)?;
     expect_invalid(elapsed_nanos(inst));
 }

@@ -32,6 +32,8 @@ int64_t coil_time_date(int64_t *err_out);
 int64_t coil_time_date_from_period(int64_t *err_out);
 int64_t coil_time_date_from_epoch_period(int64_t *err_out);
 int64_t coil_time_epoch(int64_t *err_out);
+int64_t coil_time_format_hold(const uint8_t *fmt, uint64_t fmt_len, uint8_t *out, uint64_t out_len);
+int64_t coil_time_format_apply(int64_t ts_nanos, int64_t *err_out);
 int64_t coil_time_format(int64_t ts_nanos, const uint8_t *fmt, uint64_t fmt_len, uint8_t *out, uint64_t out_len, int64_t *err_out);
 int64_t coil_time_parse(const uint8_t *text, uint64_t text_len, const uint8_t *fmt, uint64_t fmt_len, int64_t *err_out);
 

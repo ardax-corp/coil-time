@@ -6,7 +6,7 @@ test("timestamp has nanos") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "timestamp",
     };
-    assert(ts.nanos != 0)?;
+    assert(ts.nanos() != 0)?;
 }
 
 test("date formats as midnight") {

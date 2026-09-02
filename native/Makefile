@@ -19,9 +19,7 @@ CARGO_TARGET_ALT := target/release/time.dll
 
 all: artifact
 
-artifact: $(LIB)
-
-$(LIB):
+artifact:
 	cargo build --release
 	@if [ -f "$(CARGO_TARGET)" ]; then cp "$(CARGO_TARGET)" "$(LIB)"; \
 	elif [ -f "$(CARGO_TARGET_ALT)" ]; then cp "$(CARGO_TARGET_ALT)" "$(LIB)"; \
