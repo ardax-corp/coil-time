@@ -347,7 +347,7 @@ impl Period {
 }
 
 impl Instant {
-    pub fn elapsed_nanos() -> Result<int, TimeError> {
+    pub fn elapsed_nanos() -> int {
         let n = coil_time_elapsed_nanos(self.handle, err_ptr());
         if n < 0 {
             raise err_from(coil_time_last_error());
@@ -355,7 +355,7 @@ impl Instant {
         return n;
     }
 
-    pub fn elapsed_millis() -> Result<int, TimeError> {
+    pub fn elapsed_millis() -> int {
         let n = coil_time_elapsed_millis(self.handle, err_ptr());
         if n < 0 {
             raise err_from(coil_time_last_error());
