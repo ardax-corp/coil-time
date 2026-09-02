@@ -16,13 +16,12 @@ roots = ["./src", "../coil-time/src"]
 
 [ffi]
 search_paths = ["../coil-time/native"]
-allow = ["time"]
 
 [dependencies]
 time = { path = "../coil-time", trusted = true }
 ```
 
-`[dependencies] time = { path = "../coil-time" }` is spool metadata. The compiler does not follow path deps for discovery. `roots` is what loads `src/time.hy`. `trusted = true` on that row skips native `sha256` for stem `time` only when `time` is also on `[ffi] allow`.
+`[dependencies] time = { path = "../coil-time" }` is spool metadata. The compiler does not follow path deps for discovery. `roots` is what loads `src/time.hy`. Typecheck grant is `--allow-dload time`. `trusted = true` skips native `sha256` for stem `time`. Pin `coil.lock` `[[package.native]] sha256` of `libtime` if you do not set `trusted`.
 
 Build the native library from this package root:
 
@@ -30,7 +29,7 @@ Build the native library from this package root:
 make
 ```
 
-`libtime.so` (or `.dylib` / `time.dll`) must sit on `[ffi] search_paths` so `dload("time")` resolves. `roots` must include this package's `src/` so `use time::{…}` resolves here. Application code imports the Coil wrappers. It does not call `dload` itself.
+`libtime.so` (or `.dylib` / `time.dll`) must sit on `[ffi] search_paths` so `dload("time")` resolves. `roots` must include this package's `src/` so `use time::{…}` resolves here. Application code imports the Coil wrappers. It does not call `dload` itself. Pass `--allow-dload time` on typecheck and test.
 
 Then:
 
@@ -55,7 +54,6 @@ roots = ["./src", "./.spool/deps/time/src"]
 
 [ffi]
 search_paths = ["./.spool/deps/time/native"]
-allow = ["time"]
 ```
 
 This repo has no tags. The pin is `coil.lock` `rev` + `content_hash`. Omit `tag`. Use sibling checkout until spool materializes `.spool/deps`. The compiler does not read `coil.lock` and does not inject roots.
@@ -67,22 +65,22 @@ This repo has no tags. The pin is `coil.lock` `rev` + `content_hash`. Omit `tag`
 [[package]]
 name = 'time'
 git = 'https://github.com/ardax-corp/coil-time.git'
-rev = '39591c1f87d469202e2a03d6c871be8fc5ff8b63'
-content_hash = 'f1d156681ff5b66dad29b67c875d0f47b9c6717d'
+rev = 'cf792aef88b587a111aec120e2b56e11ca4c3386'
+content_hash = '4086f1fa08138ed6581a56b5a022e2eaa6786142'
 ```
 
-`rev` is the commit. `content_hash` is that commit's git tree (`git rev-parse 'HEAD^{tree}'`). Replace both when you move the pin. The values above are `main` at `39591c1` (userland package and Instant drop). They are an example, not a release.
+`rev` is the commit. `content_hash` is that commit's git tree (`git rev-parse 'HEAD^{tree}'`). Replace both when you move the pin. The values above are `main` at `cf792ae`. They are an example, not a release.
 
 If you vendor that rev yourself, `.spool/deps/time` matches the later spool layout:
 
 ```bash
 git clone https://github.com/ardax-corp/coil-time.git .spool/deps/time
-git -C .spool/deps/time checkout --detach 39591c1f87d469202e2a03d6c871be8fc5ff8b63
-test "$(git -C .spool/deps/time rev-parse 'HEAD^{tree}')" = f1d156681ff5b66dad29b67c875d0f47b9c6717d
+git -C .spool/deps/time checkout --detach cf792aef88b587a111aec120e2b56e11ca4c3386
+test "$(git -C .spool/deps/time rev-parse 'HEAD^{tree}')" = 4086f1fa08138ed6581a56b5a022e2eaa6786142
 make -C .spool/deps/time
 ```
 
-`make` copies `libtime.so` (or `.dylib` / `time.dll`) into that `native/` dir. Leave it on `[ffi] search_paths`. A lock `sha256` for the built library is the other way to satisfy the dload gate if you do not set `trusted = true`.
+`make` copies `libtime.so` (or `.dylib` / `time.dll`) into that `native/` dir. Leave it on `[ffi] search_paths`. Typecheck grant is `--allow-dload time`. Runtime integrity is `coil.lock` `[[package.native]] sha256` of that file, or `trusted = true` on the time dep.
 
 ## Call it
 
