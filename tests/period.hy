@@ -32,7 +32,7 @@ test("date_from_period year overflow") {
         Result::Ok(_) => panic "expected Overflow",
         Result::Err(e) => match e {
             TimeError::Overflow => {},
-            _ => panic "wrong error",
+            default => panic "wrong error",
         },
     };
 }

@@ -28,7 +28,7 @@ test("parse bad input is ParseError") {
         Result::Ok(_) => panic "expected ParseError",
         Result::Err(e) => match e {
             TimeError::ParseError => {},
-            _ => panic "wrong error",
+            default => panic "wrong error",
         },
     };
 }
