@@ -24,10 +24,10 @@ test("epoch is zero nanos") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "epoch",
     };
-    assert(ts.secs == 0)?;
-    assert(ts.millis == 0)?;
-    assert(ts.micros == 0)?;
-    assert(ts.nanos == 0)?;
+    assert(ts.secs() == 0)?;
+    assert(ts.millis() == 0)?;
+    assert(ts.micros() == 0)?;
+    assert(ts.nanos() == 0)?;
 }
 
 test("date_from_period midnight") {
@@ -40,5 +40,5 @@ test("date_from_period midnight") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "epoch",
     };
-    assert(ts.nanos != e.nanos)?;
+    assert(ts.nanos() != e.nanos())?;
 }

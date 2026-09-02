@@ -20,7 +20,7 @@ test("format parse roundtrip") {
     let s = must_s(format(ts, "%Y-%m-%d %H:%M:%S"));
     assert(s == "2024-01-01 00:00:00")?;
     let round = must_ts(parse(s, "%Y-%m-%d %H:%M:%S"));
-    assert(round.nanos == ts.nanos)?;
+    assert(round.nanos() == ts.nanos())?;
 }
 
 test("parse bad input is ParseError") {
