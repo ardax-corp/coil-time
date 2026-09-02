@@ -10,9 +10,9 @@ The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `
 |------|------|
 | `src/time.hy` | Package exports (`timestamp`, `period`, `Instant.drop`, …) |
 | `native/` | Rust cdylib, C ABI `coil_time_*` |
-| `coil.toml` | `[package] name = "time"`, `[ffi] allow = ["time"]`, `time = { path = ".", trusted = true }` |
+| `coil.toml` | `[package] name = "time"`, `[ffi] allow = ["time"]`, `[ffi] search_paths` |
 
-`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. That stem needs `[ffi] allow` plus a lock `sha256` or `trusted = true`. There is no first-party skip. Without allow, `dload` is `LibraryDenied`. This package's tests use `[dependencies] time = { path = ".", trusted = true }` plus `--allow-dload time`. Never `dload("c")`.
+`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. `--allow-dload time` is the typecheck grant. Runtime integrity is `coil.lock` `[[package.native]] sha256` of that file (`make coil-test`). Never `dload("c")`.
 
 Instant state is an opaque `int` handle in the `.so`. `Instant.drop` calls `coil_time_instant_drop`. Same leftover analog as `Hasher.drop`.
 
@@ -35,8 +35,7 @@ Coil tests need a sibling `coil` on `PATH` (coil-lang default features are empty
 ```bash
 # sibling coil-lang
 cargo build -p coil
-make
-../coil-lang/target/debug/coil test --allow-dload time --ffi-search-path native
+make coil-test COIL=../coil-lang/target/debug/coil
 ```
 
 Consume from a sibling checkout or a `coil.lock` pin (`rev` + `content_hash`). See [docs/consume.md](docs/consume.md).
