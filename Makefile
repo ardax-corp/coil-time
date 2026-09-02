@@ -18,14 +18,19 @@ test:
 	$(MAKE) -C native test
 
 # Host grant is CLI-only. Runtime dload still needs a native sha256 pin.
+# `trusted` on a dep skips that pin — this package pins the file `make` just built.
 coil-test: native
-	@lib=native/libtime.so; \
-	  if [ -f native/libtime.dylib ]; then lib=native/libtime.dylib; fi; \
-	  if [ -f native/libtime.dll ]; then lib=native/libtime.dll; fi; \
+	@set -eu; \
+	  lib=; \
+	  for f in native/libtime.so native/libtime.dylib native/libtime.dll native/time.dll; do \
+	    if [ -f "$$f" ]; then lib=$$f; break; fi; \
+	  done; \
+	  if [ -z "$$lib" ]; then echo "make coil-test: missing native libtime" >&2; exit 1; fi; \
 	  if command -v sha256sum >/dev/null 2>&1; then hash=$$(sha256sum "$$lib" | awk '{print $$1}'); \
 	  else hash=$$(shasum -a 256 "$$lib" | awk '{print $$1}'); fi; \
-	  printf '%s\n' '[[package]]' "name = 'time'" '[[package.native]]' "sha256 = '$$hash'" > coil.lock
-	$(COIL) test --allow-dload time --ffi-search-path native
+	  printf '%s\n' '[[package]]' "name = 'time'" '[[package.native]]' "stem = 'time'" "sha256 = '$$hash'" > coil.lock; \
+	  echo "pinned $$lib sha256=$$hash"; \
+	  $(COIL) test --allow-dload time --ffi-search-path native
 
 clean:
 	$(MAKE) -C native clean

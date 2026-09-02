@@ -45,17 +45,13 @@ jobs:
       - name: Install libffi
         run: sudo apt-get update && sudo apt-get install -y libffi-dev
 
-      - name: Native release build
-        working-directory: coil-time/native
-        run: cargo build --release
-
-      - name: Place libtime.so on FFI search path
-        working-directory: coil-time
-        run: cp native/target/release/libtime.so native/
-
       - name: Build coil
         working-directory: coil-lang
         run: cargo build -p coil
+
+      - name: Build native artifact
+        working-directory: coil-time
+        run: make
 
       - name: Coil tests
         working-directory: coil-time

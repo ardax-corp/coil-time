@@ -10,9 +10,9 @@ The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `
 |------|------|
 | `src/time.hy` | Package exports (`timestamp`, `period`, `Instant.drop`, …) |
 | `native/` | Rust cdylib, C ABI `coil_time_*` |
-| `coil.toml` | `[package] name = "time"`, `[ffi] allow = ["time"]`, `trusted = true` |
+| `coil.toml` | `[package] name = "time"`, `[ffi] allow = ["time"]` |
 
-`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. That stem needs `[ffi] allow` plus a lock `sha256` or `trusted = true`. There is no first-party skip. Without allow, `dload` is `LibraryDenied`. This package's tests use allow plus `trusted = true`. Never `dload("c")`.
+`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. That stem needs `[ffi] allow` plus a lock `sha256` or `trusted = true`. There is no first-party skip. Without allow, `dload` is `LibraryDenied`. This package's tests pin the built library's `sha256` in `coil.lock` (`make coil-test`). Never `dload("c")`.
 
 Instant state is an opaque `int` handle in the `.so`. `Instant.drop` calls `coil_time_instant_drop`. Same leftover analog as `Hasher.drop`.
 

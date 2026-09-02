@@ -181,10 +181,9 @@ fn timestamp_period_and_time_error_match_virtual_wire() {
 }
 
 #[test]
-fn dload_time_is_allow_and_trusted_not_c() {
+fn dload_time_is_allow_not_c() {
     let toml = read_repo("coil.toml");
     assert!(toml.contains("allow = [\"time\"]"), "missing [ffi] allow time");
-    assert!(toml.contains("trusted = true"), "missing trusted = true");
     assert!(!toml.contains("allow = [\"c\"]"));
     let hy = read_repo("src/time.hy");
     assert!(hy.contains("extern \"time\""));
