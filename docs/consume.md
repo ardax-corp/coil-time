@@ -2,7 +2,7 @@
 
 This package is `time`. `use time::{timestamp, Instant}` resolves from this repo's `src/`. chrono and the Instant map live in `libtime.so` / `.dylib` / `time.dll`. `extern "time"` in `src/time.hy` already calls `dload("time")`. Put the built library on `[ffi] search_paths`. `use time` without this package on `roots` is a module-not-found error.
 
-`dload("time")` needs `[ffi] allow = ["time"]` plus a lock `sha256` or `trusted = true` on the time dep. There is no first-party skip. A stem without allow is `LibraryDenied`. Allow without `trusted` or a lock `sha256` is also `LibraryDenied`. Default `trusted` is `false`. `[ffi] search_paths` locates the file. It is not a grant. Never `dload("c")`.
+This package's `coil.toml` does not use `[ffi] allow`. Typecheck grant is `--allow-dload time`. Runtime integrity is `coil.lock` `[[package.native]] sha256` plus `[dependencies] time = { path = ".", trusted = true }`. `[ffi] search_paths` locates the file. It is not a grant. Never `dload("c")`.
 
 Coil-to-Coil deps will be spool-owned once a public `spool` CLI exists. Until then this repo has no git tags and there is no `spool add`. `{ git }` is the parseable git form. `version` is optional schema, not a tag. `rev` on the dep is stored only. Pin `rev` + `content_hash` in `coil.lock` if you are not on a sibling checkout. Put the built native library on `[ffi] search_paths`.
 

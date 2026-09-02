@@ -55,6 +55,6 @@ jobs:
 
       - name: Coil tests
         working-directory: coil-time
-        run: make coil-test
+        run: make test
         env:
           COIL: ${{ github.workspace }}/coil-lang/target/debug/coil

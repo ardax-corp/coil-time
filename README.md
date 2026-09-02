@@ -10,9 +10,9 @@ The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `
 |------|------|
 | `src/time.hy` | Package exports (`timestamp`, `period`, `Instant.drop`, …) |
 | `native/` | Rust cdylib, C ABI `coil_time_*` |
-| `coil.toml` | `[package] name = "time"`, `[ffi] allow = ["time"]`, `[ffi] search_paths` |
+| `coil.toml` | `[package] name = "time"`, `[ffi] search_paths`, trusted self-dep |
 
-`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. `--allow-dload time` is the typecheck grant. Runtime integrity is `coil.lock` `[[package.native]] sha256` of that file (`make coil-test`). Never `dload("c")`.
+`extern "time"` / `dload("time")` resolves to `libtime.so` via `[ffi] search_paths = ["./native"]`. `--allow-dload time` is the typecheck grant. Runtime integrity is `coil.lock` `[[package.native]] sha256` of that file (`make test`). Never `dload("c")`.
 
 Instant state is an opaque `int` handle in the `.so`. `Instant.drop` calls `coil_time_instant_drop`. Same leftover analog as `Hasher.drop`.
 
@@ -20,7 +20,8 @@ Instant state is an opaque `int` handle in the `.so`. `Instant.drop` calls `coil
 
 ```bash
 make          # native/libtime.{so,dylib,dll}
-make test     # cargo test in native/
+make test     # coil tests (`--allow-dload time`, lock pin)
+make native-test  # cargo test in native/
 ```
 
 Or:
@@ -35,7 +36,7 @@ Coil tests need a sibling `coil` on `PATH` (coil-lang default features are empty
 ```bash
 # sibling coil-lang
 cargo build -p coil
-make coil-test COIL=../coil-lang/target/debug/coil
+make test COIL=../coil-lang/target/debug/coil
 ```
 
 Consume from a sibling checkout or a `coil.lock` pin (`rev` + `content_hash`). See [docs/consume.md](docs/consume.md).
