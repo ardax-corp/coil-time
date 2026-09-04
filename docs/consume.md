@@ -1,6 +1,6 @@
 # Consuming coil-time
 
-This package is `time`. `use time::{timestamp, Instant}` resolves from this repo's `src/`. Process clocks are HostInvoke `clock` in coil-lang (archive 4.3+: `clock_wall_nanos` / `clock_mono_nanos` / `clock_sleep_ms`). Calendar, Instant, and format/parse live in Coil here. There is no `dload("time")` and no `libtime`. `use time` without this package on `roots` is a module-not-found error.
+This package is `time`. `use time::{timestamp, Instant}` resolves from this repo's `src/`. Process clocks are HostInvoke `clock` in coil-lang (archive 4.4+: `clock_wall_nanos` / `clock_mono_nanos` / `clock_sleep_ms`). Calendar, Instant, and format/parse live in Coil here. There is no `dload("time")` and no `libtime`. `use time` without this package on `roots` is a module-not-found error.
 
 Coil-to-Coil deps will be spool-owned once a public `spool` CLI exists. Until then this repo has no git tags and there is no `spool add`. `{ git }` is the parseable git form. `version` is optional schema, not a tag. `rev` on the dep is stored only. Pin `rev` + `content_hash` in `coil.lock` if you are not on a sibling checkout.
 
@@ -104,4 +104,4 @@ Shipped names in `src/time.hy`:
 | `TimeError` | `InvalidInput`, `Overflow`, `ParseError`, `Other` |
 | `Instant` | Coil snapshot. `drop` marks it dead |
 
-Needs a coil-lang runtime with archive 4.3 (`clock` HostInvoke 122–124).
+Needs a coil-lang runtime with archive 4.4 (`clock` HostInvoke 121–123).

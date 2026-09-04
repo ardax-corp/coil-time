@@ -432,7 +432,8 @@ fn pad9(int n) -> Result<string, TimeError> {
         div = div / 10;
         i = i + 1;
     }
-    return string_from_bytes(out)?;
+    let s = string_from_bytes(out)?;
+    return s;
 }
 
 fn frac_digits(int nano) -> Result<string, TimeError> {
@@ -451,7 +452,8 @@ fn frac_digits(int nano) -> Result<string, TimeError> {
         out.push(b[i]);
         i = i + 1;
     }
-    return string_from_bytes(out)?;
+    let s = string_from_bytes(out)?;
+    return s;
 }
 
 fn parse_frac_nanos(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
@@ -493,7 +495,8 @@ fn timestamp_from_hms(int year, int month, int day, int hour, int minute, int se
     if ok == false {
         raise TimeError::ParseError;
     }
-    return civil_to_timestamp(year, month, day, hour, minute, second, nano)?;
+    let ts = civil_to_timestamp(year, month, day, hour, minute, second, nano)?;
+    return ts;
 }
 
 fn apply_offset_minutes(Timestamp ts, int offset_min) -> Result<Timestamp, TimeError> {
@@ -730,7 +733,8 @@ fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeE
         raise TimeError::ParseError;
     }
     let ts = timestamp_from_hms(year, month, day, hour, minute, second, nano)?;
-    return apply_offset_minutes(ts, offset_min)?;
+    let out = apply_offset_minutes(ts, offset_min)?;
+    return out;
 }
 
 fn timestamp() -> Result<Timestamp, TimeError> {
@@ -782,7 +786,11 @@ fn sub(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
 }
 
 fn period_add(Period a, Period b) -> Result<Period, TimeError> {
-    let years = add_i(a.years(), b.years())?;
+    // `?` on Result<int> drops Overflow; match/raise keeps the tag.
+    let years = match add_i(a.years(), b.years()) {
+        Result::Ok(n) => n,
+        Result::Err(e) => raise e,
+    };
     let months = add_i(a.months(), b.months())?;
     let days = add_i(a.days(), b.days())?;
     let hours = add_i(a.hours(), b.hours())?;
@@ -991,27 +999,33 @@ fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
 
 fn format_rfc3339(Timestamp ts) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
-    return format_civil_rfc3339(c)?;
+    let s = format_civil_rfc3339(c)?;
+    return s;
 }
 
 fn parse_rfc3339(string text) -> Result<Timestamp, TimeError> {
-    return parse_iso_datetime(text, true)?;
+    let ts = parse_iso_datetime(text, true)?;
+    return ts;
 }
 
 fn format_iso8601(Timestamp ts) -> Result<string, TimeError> {
-    return format_rfc3339(ts)?;
+    let s = format_rfc3339(ts)?;
+    return s;
 }
 
 fn parse_iso8601(string text) -> Result<Timestamp, TimeError> {
-    return parse_iso_datetime(text, false)?;
+    let ts = parse_iso_datetime(text, false)?;
+    return ts;
 }
 
 fn format_iso8601_date(Timestamp ts) -> Result<string, TimeError> {
-    return format(ts, ISO8601_DATE)?;
+    let s = format(ts, ISO8601_DATE)?;
+    return s;
 }
 
 fn parse_iso8601_date(string text) -> Result<Timestamp, TimeError> {
-    return parse(text, ISO8601_DATE)?;
+    let ts = parse(text, ISO8601_DATE)?;
+    return ts;
 }
 
 fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
@@ -1021,7 +1035,8 @@ fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
 }
 
 fn format_http_date(Timestamp ts) -> Result<string, TimeError> {
-    return format_rfc2822(ts)?;
+    let s = format_rfc2822(ts)?;
+    return s;
 }
 
 fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError> {
@@ -1081,15 +1096,18 @@ fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError
         raise TimeError::ParseError;
     }
     let ts = timestamp_from_hms(year, month, day, hour, minute, second, 0)?;
-    return apply_offset_minutes(ts, offset_min)?;
+    let out = apply_offset_minutes(ts, offset_min)?;
+    return out;
 }
 
 fn parse_rfc2822(string text) -> Result<Timestamp, TimeError> {
-    return parse_rfc2822_text(text, false)?;
+    let ts = parse_rfc2822_text(text, false)?;
+    return ts;
 }
 
 fn parse_http_date(string text) -> Result<Timestamp, TimeError> {
-    return parse_rfc2822_text(text, true)?;
+    let ts = parse_rfc2822_text(text, true)?;
+    return ts;
 }
 
 impl Timestamp {
