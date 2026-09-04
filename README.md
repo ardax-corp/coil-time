@@ -15,7 +15,7 @@ RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso86
 
 `use clock::{wall_nanos, mono_nanos, sleep_ms}` is the host edge. Instant is a Coil `int` mono snapshot plus a `live` flag. `elapsed_*` is `mono_now - start` in Coil.
 
-Needs coil-lang archive **4.3** (HostInvoke ids 122–124).
+Needs coil-lang archive **4.4** (HostInvoke ids 121–123).
 
 ## Build
 
@@ -26,7 +26,7 @@ make test     # coil tests (no native artifact)
 Coil tests need `coil` on `PATH` (coil-lang default features are empty):
 
 ```bash
-# sibling coil-lang (main, archive 4.3+)
+# sibling coil-lang (main, archive 4.4+)
 cargo build -p coil
 make test COIL=../coil-lang/target/debug/coil
 ```
