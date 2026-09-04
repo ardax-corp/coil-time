@@ -43,7 +43,7 @@ test("drop is idempotent at Instant") {
 }
 
 test("constructed dead Instant is InvalidInput") {
-    let inst = new Instant(0, false);
+    let inst = new Instant(0, 0);
     expect_invalid(elapsed_nanos(inst));
     inst.drop();
 }

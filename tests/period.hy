@@ -27,8 +27,9 @@ test("period sub fields") {
 }
 
 test("period add overflow is Overflow") {
-    let a = must_p(period(9223372036854775807, 0, 0, 0, 0, 0, 0, 0, 0));
-    let b = must_p(period(1, 0, 0, 0, 0, 0, 0, 0, 0));
+    let half = 2 ** 62;
+    let a = must_p(period(half, 0, 0, 0, 0, 0, 0, 0, 0));
+    let b = must_p(period(half, 0, 0, 0, 0, 0, 0, 0, 0));
     match period_add(a, b) {
         Result::Ok(_) => panic "expected Overflow",
         Result::Err(e) => match e {
