@@ -403,7 +403,10 @@ fn expect_lit(Vec<byte> text, int pos, int n, string lit) -> Result<int, TimeErr
 }
 
 fn expect_byte(Vec<byte> text, int pos, int n, int want) -> Result<int, TimeError> {
-    if pos >= n || (text[pos] as int) != want {
+    if pos >= n {
+        raise TimeError::ParseError;
+    }
+    if (text[pos] as int) != want {
         raise TimeError::ParseError;
     }
     return pos + 1;
@@ -424,11 +427,12 @@ fn pad9(int n) -> Result<string, TimeError> {
     while i < 9 {
         let d = rest / div;
         rest = rest % div;
-        out.push((48 + d) as byte);
+        let ch = 48 + d;
+        out.push(ch as byte);
         div = div / 10;
         i = i + 1;
     }
-    return string_from_bytes(out);
+    return string_from_bytes(out)?;
 }
 
 fn frac_digits(int nano) -> Result<string, TimeError> {
@@ -447,7 +451,7 @@ fn frac_digits(int nano) -> Result<string, TimeError> {
         out.push(b[i]);
         i = i + 1;
     }
-    return string_from_bytes(out);
+    return string_from_bytes(out)?;
 }
 
 fn parse_frac_nanos(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
@@ -489,7 +493,7 @@ fn timestamp_from_hms(int year, int month, int day, int hour, int minute, int se
     if ok == false {
         raise TimeError::ParseError;
     }
-    return civil_to_timestamp(year, month, day, hour, minute, second, nano);
+    return civil_to_timestamp(year, month, day, hour, minute, second, nano)?;
 }
 
 fn apply_offset_minutes(Timestamp ts, int offset_min) -> Result<Timestamp, TimeError> {
@@ -680,10 +684,12 @@ fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeE
     let second = pair.a;
     i = pair.b;
     let nano = 0;
-    if i < n && (tb[i] as int) == 46 {
-        pair = parse_frac_nanos(tb, i + 1, n)?;
-        nano = pair.a;
-        i = pair.b;
+    if i < n {
+        if (tb[i] as int) == 46 {
+            pair = parse_frac_nanos(tb, i + 1, n)?;
+            nano = pair.a;
+            i = pair.b;
+        }
     }
     let offset_min = 0;
     let saw_zone = false;
@@ -701,11 +707,15 @@ fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeE
                 }
                 i = i + 1;
                 let colon = false;
-                if i + 2 < n && (tb[i + 2] as int) == 58 {
-                    colon = true;
+                if i + 2 < n {
+                    if (tb[i + 2] as int) == 58 {
+                        colon = true;
+                    }
                 }
-                if require_zone && colon == false {
-                    raise TimeError::ParseError;
+                if require_zone {
+                    if colon == false {
+                        raise TimeError::ParseError;
+                    }
                 }
                 pair = parse_hhmm(tb, i, n, colon)?;
                 offset_min = sign * pair.a;
@@ -720,7 +730,7 @@ fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeE
         raise TimeError::ParseError;
     }
     let ts = timestamp_from_hms(year, month, day, hour, minute, second, nano)?;
-    return apply_offset_minutes(ts, offset_min);
+    return apply_offset_minutes(ts, offset_min)?;
 }
 
 fn timestamp() -> Result<Timestamp, TimeError> {
@@ -981,27 +991,27 @@ fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
 
 fn format_rfc3339(Timestamp ts) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
-    return format_civil_rfc3339(c);
+    return format_civil_rfc3339(c)?;
 }
 
 fn parse_rfc3339(string text) -> Result<Timestamp, TimeError> {
-    return parse_iso_datetime(text, true);
+    return parse_iso_datetime(text, true)?;
 }
 
 fn format_iso8601(Timestamp ts) -> Result<string, TimeError> {
-    return format_rfc3339(ts);
+    return format_rfc3339(ts)?;
 }
 
 fn parse_iso8601(string text) -> Result<Timestamp, TimeError> {
-    return parse_iso_datetime(text, false);
+    return parse_iso_datetime(text, false)?;
 }
 
 fn format_iso8601_date(Timestamp ts) -> Result<string, TimeError> {
-    return format(ts, ISO8601_DATE);
+    return format(ts, ISO8601_DATE)?;
 }
 
 fn parse_iso8601_date(string text) -> Result<Timestamp, TimeError> {
-    return parse(text, ISO8601_DATE);
+    return parse(text, ISO8601_DATE)?;
 }
 
 fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
@@ -1011,7 +1021,7 @@ fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
 }
 
 fn format_http_date(Timestamp ts) -> Result<string, TimeError> {
-    return format_rfc2822(ts);
+    return format_rfc2822(ts)?;
 }
 
 fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError> {
@@ -1071,15 +1081,15 @@ fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError
         raise TimeError::ParseError;
     }
     let ts = timestamp_from_hms(year, month, day, hour, minute, second, 0)?;
-    return apply_offset_minutes(ts, offset_min);
+    return apply_offset_minutes(ts, offset_min)?;
 }
 
 fn parse_rfc2822(string text) -> Result<Timestamp, TimeError> {
-    return parse_rfc2822_text(text, false);
+    return parse_rfc2822_text(text, false)?;
 }
 
 fn parse_http_date(string text) -> Result<Timestamp, TimeError> {
-    return parse_rfc2822_text(text, true);
+    return parse_rfc2822_text(text, true)?;
 }
 
 impl Timestamp {
