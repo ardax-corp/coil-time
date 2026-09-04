@@ -95,6 +95,12 @@ Shipped names in `src/time.hy`:
 | `date_from_period` / `date_from_epoch_period` | Calendar date; month/day 0 is `InvalidInput` |
 | `epoch` | Zero nanos `Timestamp` |
 | `format` / `parse` | `%Y` `%m` `%d` `%H` `%M` `%S` `%%` (tests' subset) |
+| `ISO8601_DATE` / `ISO8601` | `%Y-%m-%d` and `%Y-%m-%dT%H:%M:%S` for `format` / `parse` |
+| `format_rfc3339` / `parse_rfc3339` | UTC `Z`; parse also accepts `±HH:MM` and `.` fraction |
+| `format_iso8601` / `parse_iso8601` | Same emit as RFC 3339; parse zone optional (UTC) or `±HH:MM` / `±HHMM` |
+| `format_iso8601_date` / `parse_iso8601_date` | `YYYY-MM-DD` midnight UTC |
+| `format_rfc2822` / `parse_rfc2822` | IMF-fixdate GMT emit; parse also accepts `UT` and `±HHMM` |
+| `format_http_date` / `parse_http_date` | IMF-fixdate; parse requires `GMT` |
 | `TimeError` | `InvalidInput`, `Overflow`, `ParseError`, `Other` |
 | `Instant` | Coil snapshot. `drop` marks it dead |
 
