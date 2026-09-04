@@ -1,5 +1,5 @@
 // RFC 3339, ISO-8601, and RFC 2822 / IMF-fixdate helpers.
-use time::{parse, format, parse_rfc3339, format_rfc3339, parse_iso8601, format_iso8601, parse_iso8601_date, format_iso8601_date, parse_rfc2822, format_rfc2822, parse_http_date, format_http_date, ISO8601_DATE, TimeError, Timestamp};
+use time::{parse, format, parse_rfc3339, format_rfc3339, parse_iso8601, format_iso8601, parse_iso8601_date, format_iso8601_date, parse_rfc2822, format_rfc2822, parse_http_date, format_http_date, TimeError, Timestamp};
 
 fn must_ts(Result<Timestamp, TimeError> r) -> Timestamp {
     return match r {
@@ -63,9 +63,9 @@ test("iso8601 date roundtrip") {
     let ts = must_ts(parse_iso8601_date("2024-01-01"));
     let s = must_s(format_iso8601_date(ts));
     assert(s == "2024-01-01")?;
-    let via_const = must_ts(parse("2024-01-01", ISO8601_DATE));
-    assert(via_const.nanos() == ts.nanos())?;
-    assert(must_s(format(ts, ISO8601_DATE)) == s)?;
+    let via_pat = must_ts(parse("2024-01-01", "%Y-%m-%d"));
+    assert(via_pat.nanos() == ts.nanos())?;
+    assert(must_s(format(ts, "%Y-%m-%d")) == s)?;
     let round = must_ts(parse_iso8601_date(s));
     assert(round.nanos() == ts.nanos())?;
 }

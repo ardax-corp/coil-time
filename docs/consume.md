@@ -95,7 +95,7 @@ Shipped names in `src/time.hy`:
 | `date_from_period` / `date_from_epoch_period` | Calendar date; month/day 0 is `InvalidInput` |
 | `epoch` | Zero nanos `Timestamp` |
 | `format` / `parse` | `%Y` `%m` `%d` `%H` `%M` `%S` `%%` (tests' subset) |
-| `ISO8601_DATE` / `ISO8601` | `%Y-%m-%d` and `%Y-%m-%dT%H:%M:%S` for `format` / `parse` |
+| `%Y-%m-%d` / `%Y-%m-%dT%H:%M:%S` | Documented `format` / `parse` patterns (ISO date / date-time body) |
 | `format_rfc3339` / `parse_rfc3339` | UTC `Z`; parse also accepts `±HH:MM` and `.` fraction |
 | `format_iso8601` / `parse_iso8601` | Same emit as RFC 3339; parse zone optional (UTC) or `±HH:MM` / `±HHMM` |
 | `format_iso8601_date` / `parse_iso8601_date` | `YYYY-MM-DD` midnight UTC |

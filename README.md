@@ -4,7 +4,7 @@ Userland calendar and monotonic time for [coil](https://github.com/ardax-corp/co
 
 The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `elapsed_nanos`, `elapsed_millis`, `period`, `add`, `sub`, `period_add`, `period_sub`, `date`, `date_from_period`, `date_from_epoch_period`, `epoch`, `format`, and `parse`. Instant adds `drop` so a snapshot can be marked dead. Elapsed after drop is `TimeError::InvalidInput`.
 
-RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso8601` / `parse_iso8601`, `format_iso8601_date` / `parse_iso8601_date`, `format_rfc2822` / `parse_rfc2822`, `format_http_date` / `parse_http_date`). `ISO8601_DATE` (`%Y-%m-%d`) and `ISO8601` (`%Y-%m-%dT%H:%M:%S`) are the pattern constants for `format` / `parse`.
+RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso8601` / `parse_iso8601`, `format_iso8601_date` / `parse_iso8601_date`, `format_rfc2822` / `parse_rfc2822`, `format_http_date` / `parse_http_date`). The documented `format` / `parse` patterns are `%Y-%m-%d` (ISO date) and `%Y-%m-%dT%H:%M:%S` (date-time body, no zone).
 
 ## Layout
 
