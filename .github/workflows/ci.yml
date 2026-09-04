@@ -10,23 +10,6 @@ env:
   CI: "true"
 
 jobs:
-  native:
-    name: native
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: native
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Test
-        run: cargo test
-
-      - name: Release cdylib
-        run: cargo build --release
-
   coil:
     name: coil test
     runs-on: ubuntu-latest
@@ -38,6 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ardax-corp/coil-lang
+          ref: main
           path: coil-lang
 
       - uses: dtolnay/rust-toolchain@stable
@@ -48,10 +32,6 @@ jobs:
       - name: Build coil
         working-directory: coil-lang
         run: cargo build -p coil
-
-      - name: Build native artifact
-        working-directory: coil-time
-        run: make
 
       - name: Coil tests
         working-directory: coil-time

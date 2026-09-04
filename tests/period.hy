@@ -26,6 +26,19 @@ test("period sub fields") {
     assert(p.minutes() == 5)?;
 }
 
+test("period add overflow is Overflow") {
+    let half = 2 ** 62;
+    let a = must_p(period(half, 0, 0, 0, 0, 0, 0, 0, 0));
+    let b = must_p(period(half, 0, 0, 0, 0, 0, 0, 0, 0));
+    match period_add(a, b) {
+        Result::Ok(_) => panic "expected Overflow",
+        Result::Err(e) => match e {
+            TimeError::Overflow => {},
+            default => panic "wrong error",
+        },
+    };
+}
+
 test("date_from_period year overflow") {
     let huge = must_p(period(3000000000, 1, 1, 0, 0, 0, 0, 0, 0));
     match date_from_period(huge) {

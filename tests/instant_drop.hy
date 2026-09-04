@@ -1,4 +1,4 @@
-// Instant.drop removes the process-global handle. Missing/invalid is InvalidInput.
+// Instant is a Coil mono snapshot. drop() clears live; elapsed then InvalidInput.
 use time::{instant_now, elapsed_nanos, elapsed_millis, Instant, TimeError};
 use gc::{collect};
 
@@ -42,27 +42,10 @@ test("drop is idempotent at Instant") {
     expect_invalid(elapsed_nanos(inst));
 }
 
-test("zero handle is InvalidInput") {
-    let inst = new Instant(0, true);
+test("constructed dead Instant is InvalidInput") {
+    let inst = new Instant(0, 0);
     expect_invalid(elapsed_nanos(inst));
     inst.drop();
-}
-
-test("negative handle is InvalidInput") {
-    let inst = new Instant(-1, true);
-    expect_invalid(elapsed_nanos(inst));
-}
-
-test("unregistered handle is InvalidInput") {
-    let inst = new Instant(1000000009, true);
-    expect_invalid(elapsed_nanos(inst));
-    expect_invalid(elapsed_millis(inst));
-}
-
-test("drop missing handle is not a panic") {
-    let inst = new Instant(1000000009, true);
-    inst.drop();
-    assert(inst.is_live() == false)?;
 }
 
 fn ephemeral_instant() {
