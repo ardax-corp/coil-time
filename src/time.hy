@@ -22,6 +22,11 @@ fn i64_min() -> int {
 const I32_MAX = 2147483647;
 const I32_MIN = -2147483648;
 
+// Pattern for `format` / `parse` (calendar date only; no zone).
+const ISO8601_DATE = "%Y-%m-%d";
+// Date-time body without fraction or zone. Use `format_iso8601` / `format_rfc3339` for `Z`.
+const ISO8601 = "%Y-%m-%dT%H:%M:%S";
+
 enum TimeError {
     InvalidInput,
     Overflow,
@@ -374,6 +379,360 @@ fn parse_year(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
     return new IntPair(sign * acc, i);
 }
 
+fn bytes_eq_at(Vec<byte> text, int pos, int n, string lit) -> bool {
+    let lb = to_bytes(lit);
+    let ln = len(lb);
+    if pos + ln > n {
+        return false;
+    }
+    let i = 0;
+    while i < ln {
+        if (text[pos + i] as int) != (lb[i] as int) {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn expect_lit(Vec<byte> text, int pos, int n, string lit) -> Result<int, TimeError> {
+    if bytes_eq_at(text, pos, n, lit) {
+        return pos + len(to_bytes(lit));
+    }
+    raise TimeError::ParseError;
+}
+
+fn expect_byte(Vec<byte> text, int pos, int n, int want) -> Result<int, TimeError> {
+    if pos >= n {
+        raise TimeError::ParseError;
+    }
+    if (text[pos] as int) != want {
+        raise TimeError::ParseError;
+    }
+    return pos + 1;
+}
+
+fn string_from_bytes(Vec<byte> buf) -> Result<string, TimeError> {
+    return match from_bytes(buf) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise TimeError::Other,
+    };
+}
+
+fn pad9(int n) -> Result<string, TimeError> {
+    let out: Vec<byte> = Vec::new();
+    let rest = n;
+    let div = 100000000;
+    let i = 0;
+    while i < 9 {
+        let d = rest / div;
+        rest = rest % div;
+        let ch = 48 + d;
+        out.push(ch as byte);
+        div = div / 10;
+        i = i + 1;
+    }
+    return string_from_bytes(out)?;
+}
+
+fn frac_digits(int nano) -> Result<string, TimeError> {
+    let s = pad9(nano)?;
+    let b = to_bytes(s);
+    let end = 9;
+    while end > 1 {
+        if (b[end - 1] as int) != 48 {
+            break;
+        }
+        end = end - 1;
+    }
+    let out: Vec<byte> = Vec::new();
+    let i = 0;
+    while i < end {
+        out.push(b[i]);
+        i = i + 1;
+    }
+    return string_from_bytes(out)?;
+}
+
+fn parse_frac_nanos(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
+    let acc = 0;
+    let count = 0;
+    let i = pos;
+    while i < n {
+        let d = digit(text[i] as int);
+        if d < 0 {
+            break;
+        }
+        if count >= 9 {
+            raise TimeError::ParseError;
+        }
+        acc = acc * 10 + d;
+        count = count + 1;
+        i = i + 1;
+    }
+    if count == 0 {
+        raise TimeError::ParseError;
+    }
+    let p = 1;
+    let k = 0;
+    while k < (9 - count) {
+        p = p * 10;
+        k = k + 1;
+    }
+    return new IntPair(acc * p, i);
+}
+
+fn timestamp_from_hms(int year, int month, int day, int hour, int minute, int second, int nano) -> Result<Timestamp, TimeError> {
+    if hour > 23 || minute > 59 || second > 59 {
+        raise TimeError::ParseError;
+    }
+    if nano < 0 || nano > 999999999 {
+        raise TimeError::ParseError;
+    }
+    let ok = valid_ymd(year, month, day);
+    if ok == false {
+        raise TimeError::ParseError;
+    }
+    return civil_to_timestamp(year, month, day, hour, minute, second, nano)?;
+}
+
+fn apply_offset_minutes(Timestamp ts, int offset_min) -> Result<Timestamp, TimeError> {
+    let delta = mul_i(offset_min, NS_PER_MIN)?;
+    let out = sub_i(ts.nanos(), delta)?;
+    return timestamp_from_nanos(out);
+}
+
+fn parse_hhmm(Vec<byte> text, int pos, int n, bool colon) -> Result<IntPair, TimeError> {
+    let pair = parse_two_digits(text, pos, n)?;
+    let hour = pair.a;
+    let i = pair.b;
+    if colon {
+        i = expect_byte(text, i, n, 58)?;
+    }
+    pair = parse_two_digits(text, i, n)?;
+    let minute = pair.a;
+    if hour > 23 || minute > 59 {
+        raise TimeError::ParseError;
+    }
+    return new IntPair(hour * 60 + minute, pair.b);
+}
+
+fn weekday_sun0(int year, int month, int day) -> int {
+    return floor_mod(days_from_civil(year, month, day) + 4, 7);
+}
+
+fn weekday_name(int wd) -> string {
+    if wd == 0 {
+        return "Sun";
+    }
+    if wd == 1 {
+        return "Mon";
+    }
+    if wd == 2 {
+        return "Tue";
+    }
+    if wd == 3 {
+        return "Wed";
+    }
+    if wd == 4 {
+        return "Thu";
+    }
+    if wd == 5 {
+        return "Fri";
+    }
+    return "Sat";
+}
+
+fn month_name(int m) -> string {
+    if m == 1 {
+        return "Jan";
+    }
+    if m == 2 {
+        return "Feb";
+    }
+    if m == 3 {
+        return "Mar";
+    }
+    if m == 4 {
+        return "Apr";
+    }
+    if m == 5 {
+        return "May";
+    }
+    if m == 6 {
+        return "Jun";
+    }
+    if m == 7 {
+        return "Jul";
+    }
+    if m == 8 {
+        return "Aug";
+    }
+    if m == 9 {
+        return "Sep";
+    }
+    if m == 10 {
+        return "Oct";
+    }
+    if m == 11 {
+        return "Nov";
+    }
+    return "Dec";
+}
+
+fn parse_weekday_name(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
+    if bytes_eq_at(text, pos, n, "Sun") {
+        return new IntPair(0, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Mon") {
+        return new IntPair(1, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Tue") {
+        return new IntPair(2, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Wed") {
+        return new IntPair(3, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Thu") {
+        return new IntPair(4, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Fri") {
+        return new IntPair(5, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Sat") {
+        return new IntPair(6, pos + 3);
+    }
+    raise TimeError::ParseError;
+}
+
+fn parse_month_name(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
+    if bytes_eq_at(text, pos, n, "Jan") {
+        return new IntPair(1, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Feb") {
+        return new IntPair(2, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Mar") {
+        return new IntPair(3, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Apr") {
+        return new IntPair(4, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "May") {
+        return new IntPair(5, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Jun") {
+        return new IntPair(6, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Jul") {
+        return new IntPair(7, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Aug") {
+        return new IntPair(8, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Sep") {
+        return new IntPair(9, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Oct") {
+        return new IntPair(10, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Nov") {
+        return new IntPair(11, pos + 3);
+    }
+    if bytes_eq_at(text, pos, n, "Dec") {
+        return new IntPair(12, pos + 3);
+    }
+    raise TimeError::ParseError;
+}
+
+fn format_civil_rfc3339(Civil c) -> Result<string, TimeError> {
+    let body = year_text(c.year) + "-" + pad2(c.month) + "-" + pad2(c.day) + "T" + pad2(c.hour) + ":" + pad2(c.minute) + ":" + pad2(c.second);
+    if c.nano == 0 {
+        return body + "Z";
+    }
+    let frac = frac_digits(c.nano)?;
+    return body + "." + frac + "Z";
+}
+
+fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeError> {
+    let tb = to_bytes(text);
+    let n = len(tb);
+    let pair = parse_year(tb, 0, n)?;
+    let year = pair.a;
+    let i = expect_byte(tb, pair.b, n, 45)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let month = pair.a;
+    i = expect_byte(tb, pair.b, n, 45)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let day = pair.a;
+    i = pair.b;
+    if i >= n {
+        raise TimeError::ParseError;
+    }
+    let sep = tb[i] as int;
+    if sep != 84 && sep != 32 {
+        raise TimeError::ParseError;
+    }
+    i = i + 1;
+    pair = parse_two_digits(tb, i, n)?;
+    let hour = pair.a;
+    i = expect_byte(tb, pair.b, n, 58)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let minute = pair.a;
+    i = expect_byte(tb, pair.b, n, 58)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let second = pair.a;
+    i = pair.b;
+    let nano = 0;
+    if i < n {
+        if (tb[i] as int) == 46 {
+            pair = parse_frac_nanos(tb, i + 1, n)?;
+            nano = pair.a;
+            i = pair.b;
+        }
+    }
+    let offset_min = 0;
+    let saw_zone = false;
+    if i < n {
+        let z = tb[i] as int;
+        if z == 90 || z == 122 {
+            saw_zone = true;
+            i = i + 1;
+        } else {
+            if z == 43 || z == 45 {
+                saw_zone = true;
+                let sign = 1;
+                if z == 45 {
+                    sign = -1;
+                }
+                i = i + 1;
+                let colon = false;
+                if i + 2 < n {
+                    if (tb[i + 2] as int) == 58 {
+                        colon = true;
+                    }
+                }
+                if require_zone {
+                    if colon == false {
+                        raise TimeError::ParseError;
+                    }
+                }
+                pair = parse_hhmm(tb, i, n, colon)?;
+                offset_min = sign * pair.a;
+                i = pair.b;
+            }
+        }
+    }
+    if require_zone && saw_zone == false {
+        raise TimeError::ParseError;
+    }
+    if i != n {
+        raise TimeError::ParseError;
+    }
+    let ts = timestamp_from_hms(year, month, day, hour, minute, second, nano)?;
+    return apply_offset_minutes(ts, offset_min)?;
+}
+
 fn timestamp() -> Result<Timestamp, TimeError> {
     let nanos = wall_nanos();
     return timestamp_from_nanos(nanos);
@@ -628,6 +987,109 @@ fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
     }
     let ts = civil_to_timestamp(year, month, day, hour, minute, second, 0)?;
     return ts;
+}
+
+fn format_rfc3339(Timestamp ts) -> Result<string, TimeError> {
+    let c = civil_from_nanos(ts.nanos())?;
+    return format_civil_rfc3339(c)?;
+}
+
+fn parse_rfc3339(string text) -> Result<Timestamp, TimeError> {
+    return parse_iso_datetime(text, true)?;
+}
+
+fn format_iso8601(Timestamp ts) -> Result<string, TimeError> {
+    return format_rfc3339(ts)?;
+}
+
+fn parse_iso8601(string text) -> Result<Timestamp, TimeError> {
+    return parse_iso_datetime(text, false)?;
+}
+
+fn format_iso8601_date(Timestamp ts) -> Result<string, TimeError> {
+    return format(ts, ISO8601_DATE)?;
+}
+
+fn parse_iso8601_date(string text) -> Result<Timestamp, TimeError> {
+    return parse(text, ISO8601_DATE)?;
+}
+
+fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
+    let c = civil_from_nanos(ts.nanos())?;
+    let wd = weekday_sun0(c.year, c.month, c.day);
+    return weekday_name(wd) + ", " + pad2(c.day) + " " + month_name(c.month) + " " + year_text(c.year) + " " + pad2(c.hour) + ":" + pad2(c.minute) + ":" + pad2(c.second) + " GMT";
+}
+
+fn format_http_date(Timestamp ts) -> Result<string, TimeError> {
+    return format_rfc2822(ts)?;
+}
+
+fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError> {
+    let tb = to_bytes(text);
+    let n = len(tb);
+    let pair = parse_weekday_name(tb, 0, n)?;
+    let wd = pair.a;
+    let i = expect_lit(tb, pair.b, n, ", ")?;
+    pair = parse_two_digits(tb, i, n)?;
+    let day = pair.a;
+    i = expect_byte(tb, pair.b, n, 32)?;
+    pair = parse_month_name(tb, i, n)?;
+    let month = pair.a;
+    i = expect_byte(tb, pair.b, n, 32)?;
+    pair = parse_year(tb, i, n)?;
+    let year = pair.a;
+    i = expect_byte(tb, pair.b, n, 32)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let hour = pair.a;
+    i = expect_byte(tb, pair.b, n, 58)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let minute = pair.a;
+    i = expect_byte(tb, pair.b, n, 58)?;
+    pair = parse_two_digits(tb, i, n)?;
+    let second = pair.a;
+    i = expect_byte(tb, pair.b, n, 32)?;
+    let offset_min = 0;
+    if bytes_eq_at(tb, i, n, "GMT") {
+        i = i + 3;
+    } else {
+        if gmt_only == false && bytes_eq_at(tb, i, n, "UT") {
+            i = i + 2;
+        } else {
+            if gmt_only {
+                raise TimeError::ParseError;
+            }
+            if i >= n {
+                raise TimeError::ParseError;
+            }
+            let z = tb[i] as int;
+            if z != 43 && z != 45 {
+                raise TimeError::ParseError;
+            }
+            let sign = 1;
+            if z == 45 {
+                sign = -1;
+            }
+            pair = parse_hhmm(tb, i + 1, n, false)?;
+            offset_min = sign * pair.a;
+            i = pair.b;
+        }
+    }
+    if i != n {
+        raise TimeError::ParseError;
+    }
+    if weekday_sun0(year, month, day) != wd {
+        raise TimeError::ParseError;
+    }
+    let ts = timestamp_from_hms(year, month, day, hour, minute, second, 0)?;
+    return apply_offset_minutes(ts, offset_min)?;
+}
+
+fn parse_rfc2822(string text) -> Result<Timestamp, TimeError> {
+    return parse_rfc2822_text(text, false)?;
+}
+
+fn parse_http_date(string text) -> Result<Timestamp, TimeError> {
+    return parse_rfc2822_text(text, true)?;
 }
 
 impl Timestamp {
