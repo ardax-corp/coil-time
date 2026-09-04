@@ -1,41 +1,20 @@
-// Userland time — FFI to native/libtime.{so,dylib,dll} (dload("time")).
-// Instant handles live in the .so.
-// Instant.drop removes the handle; missing/invalid is TimeError::InvalidInput.
-//
-// err_out is never a Coil array: pass coil_time_null() and read
-// coil_time_last_error() after a failing call.
+// Userland calendar and monotonic time. Process clocks are HostInvoke
+// `clock` (`wall_nanos` / `mono_nanos` / `sleep_ms`). Instant is a Coil
+// mono snapshot; calendar math stays in this package.
 
-use string::{from_bytes, to_bytes};
+use clock::{wall_nanos, mono_nanos, sleep_ms as host_sleep_ms};
+use string::{format as sfmt, to_bytes, from_bytes};
 
-extern "time" {
-    fn coil_time_null() -> ptr;
-    fn coil_time_last_error() -> int;
-    fn coil_time_field(int i) -> int;
-    fn coil_time_store_i64(int i, int v) -> int;
-    fn coil_time_alloc(int n) -> ptr;
-    fn coil_time_free(ptr p, int n);
-    fn coil_time_store_u8(ptr p, int i, int v);
-    fn coil_time_load_u8(ptr p, int i) -> int;
-
-    fn coil_time_timestamp(ptr err_out) -> int;
-    fn coil_time_sleep_ms(int millis, ptr err_out) -> int;
-    fn coil_time_instant_now(ptr err_out) -> int;
-    fn coil_time_instant_drop(int handle, ptr err_out) -> int;
-    fn coil_time_elapsed_nanos(int handle, ptr err_out) -> int;
-    fn coil_time_elapsed_millis(int handle, ptr err_out) -> int;
-    fn coil_time_period_hold() -> int;
-    fn coil_time_add(int ts_nanos, ptr err_out) -> int;
-    fn coil_time_sub(int ts_nanos, ptr err_out) -> int;
-    fn coil_time_period_add(ptr err_out) -> int;
-    fn coil_time_period_sub(ptr err_out) -> int;
-    fn coil_time_date(ptr err_out) -> int;
-    fn coil_time_date_from_period(ptr err_out) -> int;
-    fn coil_time_date_from_epoch_period(ptr err_out) -> int;
-    fn coil_time_epoch(ptr err_out) -> int;
-    fn coil_time_format_hold(ptr fmt, int fmt_len, ptr out, int out_len) -> int;
-    fn coil_time_format_apply(int ts_nanos, ptr err_out) -> int;
-    fn coil_time_parse(ptr text, int text_len, ptr fmt, int fmt_len, ptr err_out) -> int;
-}
+const NS_PER_SEC = 1000000000;
+const NS_PER_MS = 1000000;
+const NS_PER_US = 1000;
+const NS_PER_MIN = 60000000000;
+const NS_PER_HOUR = 3600000000000;
+const NS_PER_DAY = 86400000000000;
+const I64_MAX = 9223372036854775807;
+const I64_MIN = -9223372036854775807 - 1;
+const I32_MAX = 2147483647;
+const I32_MIN = -2147483648;
 
 enum TimeError {
     InvalidInput,
@@ -64,110 +43,38 @@ class Period {
 }
 
 class Instant {
-    handle: int,
+    start: int,
     live: bool,
 }
 
-fn err_ptr() -> ptr {
-    return coil_time_null();
+class Civil {
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+    second: int,
+    nano: int,
 }
 
-fn err_from(int tag) -> TimeError {
-    if tag == 0 {
-        return TimeError::InvalidInput;
-    }
-    if tag == 1 {
-        return TimeError::Overflow;
-    }
-    if tag == 2 {
-        return TimeError::ParseError;
-    }
-    return TimeError::Other;
-}
-
-fn copy_in(Vec<byte> data) -> ptr {
-    let n = len(data);
-    let p = coil_time_alloc(n);
-    for i in 0..n {
-        let idx: int = i;
-        let v: int = data[idx] as int;
-        coil_time_store_u8(p, idx, v);
-    }
-    return p;
-}
-
-fn copy_out(ptr p, int n) -> Vec<byte> {
-    let out: Vec<byte> = Vec::new();
-    for i in 0..n {
-        let idx: int = i;
-        let v: int = coil_time_load_u8(p, idx);
-        let b: byte = v as byte;
-        out.push(b);
-    }
-    return out;
-}
-
-fn take_timestamp() -> Timestamp {
-    let secs = coil_time_field(0);
-    let millis = coil_time_field(1);
-    let micros = coil_time_field(2);
-    let nanos = coil_time_field(3);
-    return new Timestamp(secs, millis, micros, nanos);
-}
-
-fn take_period() -> Period {
-    let years = coil_time_field(0);
-    let months = coil_time_field(1);
-    let days = coil_time_field(2);
-    let hours = coil_time_field(3);
-    let minutes = coil_time_field(4);
-    let secs = coil_time_field(5);
-    let millis = coil_time_field(6);
-    let micros = coil_time_field(7);
-    let nanos = coil_time_field(8);
-    return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
-}
-
-fn put_period(Period p) {
-    let years = p.years();
-    let months = p.months();
-    let days = p.days();
-    let hours = p.hours();
-    let minutes = p.minutes();
-    let secs = p.secs();
-    let millis = p.millis();
-    let micros = p.micros();
-    let nanos = p.nanos();
-    coil_time_store_i64(0, years);
-    coil_time_store_i64(1, months);
-    coil_time_store_i64(2, days);
-    coil_time_store_i64(3, hours);
-    coil_time_store_i64(4, minutes);
-    coil_time_store_i64(5, secs);
-    coil_time_store_i64(6, millis);
-    coil_time_store_i64(7, micros);
-    coil_time_store_i64(8, nanos);
+fn timestamp_from_nanos(int nanos) -> Timestamp {
+    return new Timestamp(floor_div(nanos, NS_PER_SEC), floor_div(nanos, NS_PER_MS), floor_div(nanos, NS_PER_US), nanos);
 }
 
 fn timestamp() -> Result<Timestamp, TimeError> {
-    let rc = coil_time_timestamp(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    return timestamp_from_nanos(wall_nanos());
 }
 
 fn sleep_ms(int millis) -> Result<(), TimeError> {
-    let rc = coil_time_sleep_ms(millis, err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
+    if millis < 0 {
+        raise TimeError::InvalidInput;
     }
+    host_sleep_ms(millis);
     return ();
 }
 
 fn instant_now() -> Instant {
-    let id = coil_time_instant_now(err_ptr());
-    return new Instant(id, true);
+    return new Instant(mono_nanos(), true);
 }
 
 fn elapsed_nanos(Instant inst) -> Result<int, TimeError> {
@@ -189,120 +96,212 @@ fn period(int years, int months, int days, int hours, int minutes, int secs, int
 }
 
 fn add(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
-    put_period(p);
-    let nanos = ts.nanos();
-    let rc = coil_time_add(nanos, err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    let out = apply_period(ts.nanos(), p)?;
+    return timestamp_from_nanos(out);
 }
 
 fn sub(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
-    put_period(p);
-    let nanos = ts.nanos();
-    let rc = coil_time_sub(nanos, err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    let neg = negate_period(p)?;
+    let out = apply_period(ts.nanos(), neg)?;
+    return timestamp_from_nanos(out);
 }
 
 fn period_add(Period a, Period b) -> Result<Period, TimeError> {
-    put_period(a);
-    coil_time_period_hold();
-    put_period(b);
-    let rc = coil_time_period_add(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_period();
+    return new Period(
+        add_i(a.years(), b.years())?,
+        add_i(a.months(), b.months())?,
+        add_i(a.days(), b.days())?,
+        add_i(a.hours(), b.hours())?,
+        add_i(a.minutes(), b.minutes())?,
+        add_i(a.secs(), b.secs())?,
+        add_i(a.millis(), b.millis())?,
+        add_i(a.micros(), b.micros())?,
+        add_i(a.nanos(), b.nanos())?,
+    );
 }
 
 fn period_sub(Period a, Period b) -> Result<Period, TimeError> {
-    put_period(a);
-    coil_time_period_hold();
-    put_period(b);
-    let rc = coil_time_period_sub(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_period();
+    return new Period(
+        sub_i(a.years(), b.years())?,
+        sub_i(a.months(), b.months())?,
+        sub_i(a.days(), b.days())?,
+        sub_i(a.hours(), b.hours())?,
+        sub_i(a.minutes(), b.minutes())?,
+        sub_i(a.secs(), b.secs())?,
+        sub_i(a.millis(), b.millis())?,
+        sub_i(a.micros(), b.micros())?,
+        sub_i(a.nanos(), b.nanos())?,
+    );
 }
 
 fn date() -> Result<Timestamp, TimeError> {
-    let rc = coil_time_date(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    let nanos = wall_nanos();
+    let days = floor_div(nanos, NS_PER_DAY);
+    let midnight = mul_i(days, NS_PER_DAY)?;
+    return timestamp_from_nanos(midnight);
 }
 
 fn date_from_period(Period p) -> Result<Timestamp, TimeError> {
-    put_period(p);
-    let rc = coil_time_date_from_period(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
+    if p.years() < I32_MIN || p.years() > I32_MAX {
+        raise TimeError::Overflow;
     }
-    return take_timestamp();
+    if p.months() < 0 || p.days() < 0 {
+        raise TimeError::Overflow;
+    }
+    if p.months() == 0 || p.days() == 0 {
+        raise TimeError::InvalidInput;
+    }
+    if p.months() > 12 || !valid_ymd(p.years(), p.months(), p.days()) {
+        raise TimeError::InvalidInput;
+    }
+    let days = days_from_civil(p.years(), p.months(), p.days());
+    let nanos = mul_i(days, NS_PER_DAY)?;
+    return timestamp_from_nanos(nanos);
 }
 
 fn date_from_epoch_period(Period p) -> Result<Timestamp, TimeError> {
-    put_period(p);
-    let rc = coil_time_date_from_epoch_period(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    let out = apply_period(0, p)?;
+    return timestamp_from_nanos(out);
 }
 
 fn epoch() -> Result<Timestamp, TimeError> {
-    let rc = coil_time_epoch(err_ptr());
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return take_timestamp();
+    return timestamp_from_nanos(0);
 }
 
 fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
+    let c = civil_from_nanos(ts.nanos())?;
     let fb = to_bytes(fmt);
-    let fmt_n = len(fb);
-    let src = copy_in(fb);
-    let cap = 256;
-    let out = coil_time_alloc(cap);
-    let nanos = ts.nanos();
-    coil_time_format_hold(src, fmt_n, out, cap);
-    let rc = coil_time_format_apply(nanos, err_ptr());
-    let n = rc;
-    if rc < 0 {
-        n = 0;
+    let n = len(fb);
+    let out = "";
+    let i = 0;
+    while i < n {
+        let b = fb[i] as int;
+        if b != 37 {
+            out = out + byte_char(b)?;
+            i = i + 1;
+        } else {
+            if i + 1 >= n {
+                raise TimeError::InvalidInput;
+            }
+            let spec = fb[i + 1] as int;
+            if spec == 37 {
+                out = out + "%";
+            } else {
+                if spec == 89 {
+                    out = out + year_text(c.year);
+                } else {
+                    if spec == 109 {
+                        out = out + pad2(c.month);
+                    } else {
+                        if spec == 100 {
+                            out = out + pad2(c.day);
+                        } else {
+                            if spec == 72 {
+                                out = out + pad2(c.hour);
+                            } else {
+                                if spec == 77 {
+                                    out = out + pad2(c.minute);
+                                } else {
+                                    if spec == 83 {
+                                        out = out + pad2(c.second);
+                                    } else {
+                                        raise TimeError::InvalidInput;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            i = i + 2;
+        }
     }
-    let bytes = copy_out(out, n);
-    coil_time_free(src, fmt_n);
-    coil_time_free(out, cap);
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
-    }
-    return match from_bytes(bytes) {
-        Result::Ok(text) => text,
-        Result::Err(_) => raise TimeError::Other,
-    };
+    return out;
 }
 
 fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
     let tb = to_bytes(text);
-    let tn = len(tb);
     let fb = to_bytes(fmt);
-    let fmt_n = len(fb);
-    let tp = copy_in(tb);
-    let fp = copy_in(fb);
-    let rc = coil_time_parse(tp, tn, fp, fmt_n, err_ptr());
-    coil_time_free(tp, tn);
-    coil_time_free(fp, fmt_n);
-    if rc < 0 {
-        raise err_from(coil_time_last_error());
+    let tn = len(tb);
+    let flen = len(fb);
+    let ti = 0;
+    let fi = 0;
+    let year = 1970;
+    let month = 1;
+    let day = 1;
+    let hour = 0;
+    let minute = 0;
+    let second = 0;
+    while fi < flen {
+        let b = fb[fi] as int;
+        if b != 37 {
+            if ti >= tn || (tb[ti] as int) != b {
+                raise TimeError::ParseError;
+            }
+            ti = ti + 1;
+            fi = fi + 1;
+        } else {
+            if fi + 1 >= flen {
+                raise TimeError::ParseError;
+            }
+            let spec = fb[fi + 1] as int;
+            if spec == 37 {
+                if ti >= tn || (tb[ti] as int) != 37 {
+                    raise TimeError::ParseError;
+                }
+                ti = ti + 1;
+            } else {
+                if spec == 89 {
+                    let ypair = parse_year(tb, ti, tn)?;
+                    year = ypair[0];
+                    ti = ypair[1];
+                } else {
+                    if spec == 109 {
+                        let pair = parse_two_digits(tb, ti, tn)?;
+                        month = pair[0];
+                        ti = pair[1];
+                    } else {
+                        if spec == 100 {
+                            let pair = parse_two_digits(tb, ti, tn)?;
+                            day = pair[0];
+                            ti = pair[1];
+                        } else {
+                            if spec == 72 {
+                                let pair = parse_two_digits(tb, ti, tn)?;
+                                hour = pair[0];
+                                ti = pair[1];
+                            } else {
+                                if spec == 77 {
+                                    let pair = parse_two_digits(tb, ti, tn)?;
+                                    minute = pair[0];
+                                    ti = pair[1];
+                                } else {
+                                    if spec == 83 {
+                                        let pair = parse_two_digits(tb, ti, tn)?;
+                                        second = pair[0];
+                                        ti = pair[1];
+                                    } else {
+                                        raise TimeError::ParseError;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            fi = fi + 2;
+        }
     }
-    return take_timestamp();
+    if ti != tn {
+        raise TimeError::ParseError;
+    }
+    if hour > 23 || minute > 59 || second > 59 {
+        raise TimeError::ParseError;
+    }
+    if !valid_ymd(year, month, day) {
+        raise TimeError::ParseError;
+    }
+    return civil_to_timestamp(year, month, day, hour, minute, second, 0);
 }
 
 impl Timestamp {
@@ -363,19 +362,19 @@ impl Period {
 
 impl Instant {
     pub fn elapsed_nanos() -> Result<int, TimeError> {
-        let n = coil_time_elapsed_nanos(self.handle, err_ptr());
-        if n < 0 {
-            raise err_from(coil_time_last_error());
+        if !self.live {
+            raise TimeError::InvalidInput;
         }
-        return n;
+        let now = mono_nanos();
+        if now < self.start {
+            return 0;
+        }
+        return now - self.start;
     }
 
     pub fn elapsed_millis() -> Result<int, TimeError> {
-        let n = coil_time_elapsed_millis(self.handle, err_ptr());
-        if n < 0 {
-            raise err_from(coil_time_last_error());
-        }
-        return n;
+        let ns = self.elapsed_nanos()?;
+        return ns / NS_PER_MS;
     }
 
     pub fn is_live() -> bool {
@@ -383,9 +382,312 @@ impl Instant {
     }
 
     fn drop() {
-        if self.live {
-            coil_time_instant_drop(self.handle, coil_time_null());
-            self.live = false;
-        }
+        self.live = false;
     }
+}
+
+fn add_i(int a, int b) -> Result<int, TimeError> {
+    if b > 0 && a > I64_MAX - b {
+        raise TimeError::Overflow;
+    }
+    if b < 0 && a < I64_MIN - b {
+        raise TimeError::Overflow;
+    }
+    return a + b;
+}
+
+fn sub_i(int a, int b) -> Result<int, TimeError> {
+    if b > 0 && a < I64_MIN + b {
+        raise TimeError::Overflow;
+    }
+    if b < 0 && a > I64_MAX + b {
+        raise TimeError::Overflow;
+    }
+    return a - b;
+}
+
+fn mul_i(int a, int b) -> Result<int, TimeError> {
+    if a == 0 || b == 0 {
+        return 0;
+    }
+    if a == I64_MIN {
+        if b == 1 {
+            return I64_MIN;
+        }
+        raise TimeError::Overflow;
+    }
+    if b == I64_MIN {
+        if a == 1 {
+            return I64_MIN;
+        }
+        raise TimeError::Overflow;
+    }
+    let sa = 1;
+    let sb = 1;
+    let ua = a;
+    let ub = b;
+    if a < 0 {
+        sa = -1;
+        ua = -a;
+    }
+    if b < 0 {
+        sb = -1;
+        ub = -b;
+    }
+    if ua > I64_MAX / ub {
+        raise TimeError::Overflow;
+    }
+    let prod = ua * ub;
+    if sa != sb {
+        return -prod;
+    }
+    return prod;
+}
+
+fn neg_i(int n) -> Result<int, TimeError> {
+    if n == I64_MIN {
+        raise TimeError::Overflow;
+    }
+    return -n;
+}
+
+fn floor_div(int a, int b) -> int {
+    let q = a / b;
+    let r = a % b;
+    if r != 0 && ((a < 0 && b > 0) || (a > 0 && b < 0)) {
+        return q - 1;
+    }
+    return q;
+}
+
+fn floor_mod(int a, int b) -> int {
+    return a - floor_div(a, b) * b;
+}
+
+fn is_leap(int y) -> bool {
+    if y % 400 == 0 {
+        return true;
+    }
+    if y % 100 == 0 {
+        return false;
+    }
+    return y % 4 == 0;
+}
+
+fn month_len(int y, int m) -> int {
+    if m == 1 || m == 3 || m == 5 || m == 7 || m == 8 || m == 10 || m == 12 {
+        return 31;
+    }
+    if m == 4 || m == 6 || m == 9 || m == 11 {
+        return 30;
+    }
+    if is_leap(y) {
+        return 29;
+    }
+    return 28;
+}
+
+fn valid_ymd(int y, int m, int d) -> bool {
+    if m < 1 || m > 12 || d < 1 {
+        return false;
+    }
+    return d <= month_len(y, m);
+}
+
+fn days_from_civil(int year, int month, int day) -> int {
+    let y = year;
+    if month <= 2 {
+        y = y - 1;
+    }
+    let era = floor_div(y, 400);
+    if y < 0 && y % 400 != 0 {
+        era = floor_div(y - 399, 400);
+    }
+    let yoe = y - era * 400;
+    let adj = month + 9;
+    if month > 2 {
+        adj = month - 3;
+    }
+    let doy = (153 * adj + 2) / 5 + day - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+fn civil_ymd(int z) -> Civil {
+    let zz = z + 719468;
+    let era = floor_div(zz, 146097);
+    if zz < 0 && zz % 146097 != 0 {
+        era = floor_div(zz - 146096, 146097);
+    }
+    let doe = zz - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = mp + 3;
+    if mp >= 10 {
+        m = mp - 9;
+    }
+    let year = y;
+    if m <= 2 {
+        year = y + 1;
+    }
+    return new Civil(year, m, d, 0, 0, 0, 0);
+}
+
+fn civil_from_nanos(int nanos) -> Result<Civil, TimeError> {
+    let days = floor_div(nanos, NS_PER_DAY);
+    let day_ns = floor_mod(nanos, NS_PER_DAY);
+    let c = civil_ymd(days);
+    c.hour = day_ns / NS_PER_HOUR;
+    let rem = day_ns % NS_PER_HOUR;
+    c.minute = rem / NS_PER_MIN;
+    rem = rem % NS_PER_MIN;
+    c.second = rem / NS_PER_SEC;
+    c.nano = rem % NS_PER_SEC;
+    return c;
+}
+
+fn civil_to_timestamp(int year, int month, int day, int hour, int minute, int second, int nano) -> Result<Timestamp, TimeError> {
+    let days = days_from_civil(year, month, day);
+    let acc = mul_i(days, NS_PER_DAY)?;
+    acc = add_i(acc, mul_i(hour, NS_PER_HOUR)?)?;
+    acc = add_i(acc, mul_i(minute, NS_PER_MIN)?)?;
+    acc = add_i(acc, mul_i(second, NS_PER_SEC)?)?;
+    acc = add_i(acc, nano)?;
+    return timestamp_from_nanos(acc);
+}
+
+fn add_months_civil(Civil c, int month_delta) -> Result<Civil, TimeError> {
+    if month_delta == 0 {
+        return c;
+    }
+    let total = add_i(mul_i(c.year, 12)?, c.month - 1)?;
+    total = add_i(total, month_delta)?;
+    let year = floor_div(total, 12);
+    let month = floor_mod(total, 12) + 1;
+    let dim = month_len(year, month);
+    let day = c.day;
+    if day > dim {
+        day = dim;
+    }
+    return new Civil(year, month, day, c.hour, c.minute, c.second, c.nano);
+}
+
+fn period_time_nanos(Period p) -> Result<int, TimeError> {
+    let acc = mul_i(p.days(), NS_PER_DAY)?;
+    acc = add_i(acc, mul_i(p.hours(), NS_PER_HOUR)?)?;
+    acc = add_i(acc, mul_i(p.minutes(), NS_PER_MIN)?)?;
+    acc = add_i(acc, mul_i(p.secs(), NS_PER_SEC)?)?;
+    acc = add_i(acc, mul_i(p.millis(), NS_PER_MS)?)?;
+    acc = add_i(acc, mul_i(p.micros(), NS_PER_US)?)?;
+    acc = add_i(acc, p.nanos())?;
+    return acc;
+}
+
+fn apply_period(int nanos, Period p) -> Result<int, TimeError> {
+    let month_delta = add_i(mul_i(p.years(), 12)?, p.months())?;
+    let c = civil_from_nanos(nanos)?;
+    c = add_months_civil(c, month_delta)?;
+    let base = civil_to_timestamp(c.year, c.month, c.day, c.hour, c.minute, c.second, c.nano)?;
+    let delta = period_time_nanos(p)?;
+    return add_i(base.nanos(), delta);
+}
+
+fn negate_period(Period p) -> Result<Period, TimeError> {
+    return new Period(
+        neg_i(p.years())?,
+        neg_i(p.months())?,
+        neg_i(p.days())?,
+        neg_i(p.hours())?,
+        neg_i(p.minutes())?,
+        neg_i(p.secs())?,
+        neg_i(p.millis())?,
+        neg_i(p.micros())?,
+        neg_i(p.nanos())?,
+    );
+}
+
+fn pad2(int n) -> string {
+    if n < 10 {
+        return "0" + sfmt("%i", n);
+    }
+    return sfmt("%i", n);
+}
+
+fn year_text(int y) -> string {
+    if y < 0 {
+        return "-" + pad4(0 - y);
+    }
+    return pad4(y);
+}
+
+fn pad4(int n) -> string {
+    let s = sfmt("%i", n);
+    if n < 10 {
+        return "000" + s;
+    }
+    if n < 100 {
+        return "00" + s;
+    }
+    if n < 1000 {
+        return "0" + s;
+    }
+    return s;
+}
+
+fn byte_char(int b) -> Result<string, TimeError> {
+    if b < 0 || b > 255 {
+        raise TimeError::InvalidInput;
+    }
+    let raw: Vec<byte> = Vec::new();
+    raw.push(b as byte);
+    return match from_bytes(raw) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise TimeError::Other,
+    };
+}
+
+fn parse_two_digits(Vec<byte> text, int pos, int n) -> Result<[int; 2], TimeError> {
+    if pos + 2 > n {
+        raise TimeError::ParseError;
+    }
+    let a = digit(text[pos] as int);
+    let b = digit(text[pos + 1] as int);
+    if a < 0 || b < 0 {
+        raise TimeError::ParseError;
+    }
+    return [a * 10 + b, pos + 2];
+}
+
+fn parse_year(Vec<byte> text, int pos, int n) -> Result<[int; 2], TimeError> {
+    let i = pos;
+    let sign = 1;
+    if i < n && (text[i] as int) == 45 {
+        sign = -1;
+        i = i + 1;
+    }
+    if i + 4 > n {
+        raise TimeError::ParseError;
+    }
+    let acc = 0;
+    let k = 0;
+    while k < 4 {
+        let d = digit(text[i] as int);
+        if d < 0 {
+            raise TimeError::ParseError;
+        }
+        acc = acc * 10 + d;
+        i = i + 1;
+        k = k + 1;
+    }
+    return [sign * acc, i];
+}
+
+fn digit(int b) -> int {
+    if b >= 48 && b <= 57 {
+        return b - 48;
+    }
+    return -1;
 }
