@@ -6,7 +6,6 @@ on:
   pull_request:
 
 env:
-  CARGO_TERM_COLOR: always
   CI: "true"
 
 jobs:
@@ -15,26 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: coil-time
 
-      - uses: actions/checkout@v4
-        with:
-          repository: ardax-corp/coil-lang
-          ref: main
-          path: coil-lang
+      # coil comes from the coil-lang `edge` release (a snapshot of its main,
+      # rebuilt after every green coil-lang CI run) instead of a source build.
+      - name: Install coil (edge)
+        uses: ardax-corp/coil-lang/.github/actions/setup-coil@main
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install libffi
-        run: sudo apt-get update && sudo apt-get install -y libffi-dev
-
-      - name: Build coil
-        working-directory: coil-lang
-        run: cargo build -p coil
-
+      # The Makefile runs $(COIL) test; setup-coil exports COIL.
       - name: Coil tests
-        working-directory: coil-time
         run: make test
-        env:
-          COIL: ${{ github.workspace }}/coil-lang/target/debug/coil
