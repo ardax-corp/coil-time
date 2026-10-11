@@ -1,68 +1,30 @@
 # Consuming coil-time
 
-This package is `time`. `use time::{timestamp, Instant}` resolves from this repo's `src/`. Process clocks are HostInvoke `clock` in coil-lang (archive 4.4+: `clock_wall_nanos` / `clock_mono_nanos` / `clock_sleep_ms`). Calendar, Instant, and format/parse live in Coil here. There is no `dload("time")` and no `libtime`. `use time` without this package on `roots` is a module-not-found error.
+This package is `time`. `use time::{timestamp, Instant}` resolves from this repo's `src/`. Process clocks are HostInvoke `clock` in coil-lang (archive 4.4+: `clock_wall_nanos` / `clock_mono_nanos` / `clock_sleep_ms`). Calendar, Instant, and format/parse live in Coil here. There is no `dload("time")` and no `libtime`. `use time` without this package's `src/` as a `--root` is a module-not-found error.
 
-Coil-to-Coil deps will be spool-owned once a public `spool` CLI exists. Until then this repo has no git tags and there is no `spool add`. `{ git }` is the parseable git form. `version` is optional schema, not a tag. `rev` on the dep is stored only. Pin `rev` + `content_hash` in `coil.lock` if you are not on a sibling checkout.
+## Depend on it
 
-## Sibling checkout
+With [spool](https://github.com/ardax-corp/spool):
 
-This is the working path. Clone this repo next to your project. In the consumer `coil.toml`:
-
-```toml
-[module]
-roots = ["./src", "../coil-time/src"]
-
-[dependencies]
-time = { path = "../coil-time" }
+```bash
+spool add time --git https://github.com/ardax-corp/coil-time.git --rev <commit SHA>
 ```
 
-`[dependencies] time = { path = "../coil-time" }` is spool metadata. The compiler does not follow path deps for discovery. `roots` is what loads `src/time.hy`. No `--allow-dload time`. No `[ffi] search_paths`.
+This repo has no tags, so pin a commit with `--rev`. spool records the dep in `coil.toml`, writes `coil.lock` (`rev` + `content_hash`), links `.spool/deps/time`, and passes `--root` for it to `coil`. A sibling checkout also works as a path dep: `spool add time --path ../coil-time`.
 
-Then:
+Without spool, clone this repo next to your project and pass the root yourself. coil reads no `coil.toml` and no `coil.lock`. No `--allow-dload time`. No `--ffi-search-path`.
+
+```bash
+coil --root ../coil-time/src main.hy
+```
+
+Application code imports the Coil wrappers. It does not call `dload` or HostInvoke `clock_*` names itself.
 
 ```coil
 use time::{timestamp, sleep_ms, instant_now, TimeError};
 
 let ts = timestamp()?;
 ```
-
-## Git dep and coil.lock
-
-`{ git }` is the parseable form. `version` is optional schema, not a tag. `rev` on the dep is stored only. There is no public `spool` CLI. Do not run `spool add`.
-
-Parseable example:
-
-```toml
-[dependencies]
-time = { git = "https://github.com/ardax-corp/coil-time.git" }
-
-[module]
-roots = ["./src", "./.spool/deps/time/src"]
-```
-
-This repo has no tags. The pin is `coil.lock` `rev` + `content_hash`. Omit `tag`. Use sibling checkout until spool materializes `.spool/deps`. The compiler does not read `coil.lock` and does not inject roots.
-
-`coil.lock`:
-
-```
-# spool lockfile v1
-[[package]]
-name = 'time'
-git = 'https://github.com/ardax-corp/coil-time.git'
-rev = 'REPLACE_WITH_PINNED_REV'
-content_hash = 'REPLACE_WITH_TREE'
-```
-
-`rev` is the commit. `content_hash` is that commit's git tree (`git rev-parse 'HEAD^{tree}'`). Replace both when you move the pin.
-
-If you vendor that rev yourself, `.spool/deps/time` matches the later spool layout:
-
-```bash
-git clone https://github.com/ardax-corp/coil-time.git .spool/deps/time
-git -C .spool/deps/time checkout --detach REPLACE_WITH_PINNED_REV
-```
-
-`roots` must include this package's `src/` so `use time::{…}` resolves here. Application code imports the Coil wrappers. It does not call `dload` or HostInvoke `clock_*` names itself.
 
 ## Call it
 

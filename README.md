@@ -31,9 +31,7 @@ cargo build -p coil
 make test COIL=../coil-lang/target/debug/coil
 ```
 
-Consume from a sibling checkout or a `coil.lock` pin (`rev` + `content_hash`). See [docs/consume.md](docs/consume.md).
-
-Spool will own Coil-to-Coil deps once it exists. Until then there is no `spool add` and this repo has no tags. `{ git }` is the parseable git dep. `version` is optional schema, not a tag.
+Consume with `spool add time --git https://github.com/ardax-corp/coil-time.git --rev <commit SHA>` (no tags yet), or a sibling checkout plus `--root ../coil-time/src`. See [docs/consume.md](docs/consume.md).
 
 ## License
 
