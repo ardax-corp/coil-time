@@ -1,4 +1,5 @@
 // Period field add/sub and overflow (virtual period_add_parts).
+use tests::assert;
 use time::{period, period_add, period_sub, date_from_period, TimeError, Period};
 
 fn must_p(Result<Period, TimeError> r) -> Period {
@@ -12,18 +13,18 @@ test("period add fields") {
     let a = must_p(period(0, 0, 1, 2, 0, 0, 0, 0, 0));
     let b = must_p(period(0, 0, 3, 0, 5, 0, 0, 0, 0));
     let p = must_p(period_add(a, b));
-    assert(p.days() == 4)?;
-    assert(p.hours() == 2)?;
-    assert(p.minutes() == 5)?;
+    assert!(p.days() == 4);
+    assert!(p.hours() == 2);
+    assert!(p.minutes() == 5);
 }
 
 test("period sub fields") {
     let a = must_p(period(0, 0, 4, 2, 5, 0, 0, 0, 0));
     let b = must_p(period(0, 0, 1, 2, 0, 0, 0, 0, 0));
     let p = must_p(period_sub(a, b));
-    assert(p.days() == 3)?;
-    assert(p.hours() == 0)?;
-    assert(p.minutes() == 5)?;
+    assert!(p.days() == 3);
+    assert!(p.hours() == 0);
+    assert!(p.minutes() == 5);
 }
 
 test("period add overflow is Overflow") {

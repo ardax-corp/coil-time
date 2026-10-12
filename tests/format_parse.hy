@@ -1,4 +1,5 @@
 // Format / parse roundtrip (2024-01-01 UTC).
+use tests::assert;
 use time::{parse, format, TimeError, Timestamp};
 
 fn must_ts(Result<Timestamp, TimeError> r) -> Timestamp {
@@ -18,9 +19,9 @@ fn must_s(Result<string, TimeError> r) -> string {
 test("format parse roundtrip") {
     let ts = must_ts(parse("2024-01-01 00:00:00", "%Y-%m-%d %H:%M:%S"));
     let s = must_s(format(ts, "%Y-%m-%d %H:%M:%S"));
-    assert(s == "2024-01-01 00:00:00")?;
+    assert!(s == "2024-01-01 00:00:00");
     let round = must_ts(parse(s, "%Y-%m-%d %H:%M:%S"));
-    assert(round.nanos() == ts.nanos())?;
+    assert!(round.nanos() == ts.nanos());
 }
 
 test("parse bad input is ParseError") {
