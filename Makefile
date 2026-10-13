@@ -6,9 +6,11 @@
 .PHONY: test coil-test clean
 
 COIL ?= coil
+# Extra module roots for `make test` (CI passes the coil-stdlib checkout).
+COIL_ROOTS ?=
 
 test:
-	$(COIL) test
+	$(COIL) test $(COIL_ROOTS)
 
 coil-test: test
 
