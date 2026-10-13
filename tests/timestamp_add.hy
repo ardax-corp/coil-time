@@ -1,4 +1,5 @@
 // Timestamp add one month from 2024-01-01 UTC (virtual host test).
+use tests::assert;
 use time::{parse, add, sub, period, format, TimeError, Timestamp, Period};
 
 fn must_ts(Result<Timestamp, TimeError> r) -> Timestamp {
@@ -23,7 +24,7 @@ test("timestamp add one month") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "format",
     };
-    assert(s == "2024-02-01 00:00:00")?;
+    assert!(s == "2024-02-01 00:00:00");
 }
 
 test("timestamp sub one day") {
@@ -34,5 +35,5 @@ test("timestamp sub one day") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "format",
     };
-    assert(s == "2024-01-01 00:00:00")?;
+    assert!(s == "2024-01-01 00:00:00");
 }

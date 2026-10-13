@@ -1,4 +1,5 @@
 // Wall clock timestamp and UTC date at midnight.
+use tests::assert;
 use time::{timestamp, date, format, TimeError};
 
 test("timestamp has nanos") {
@@ -6,7 +7,7 @@ test("timestamp has nanos") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "timestamp",
     };
-    assert(ts.nanos() != 0)?;
+    assert!(ts.nanos() != 0);
 }
 
 test("date formats as midnight") {
@@ -18,5 +19,5 @@ test("date formats as midnight") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "format",
     };
-    assert(s == "00:00:00")?;
+    assert!(s == "00:00:00");
 }

@@ -1,4 +1,5 @@
 // date_from_period rejects month 0; epoch nanos is 0.
+use tests::assert;
 use time::{date_from_period, epoch, period, TimeError, Period, Timestamp};
 
 fn must_p(Result<Period, TimeError> r) -> Period {
@@ -24,10 +25,10 @@ test("epoch is zero nanos") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "epoch",
     };
-    assert(ts.secs() == 0)?;
-    assert(ts.millis() == 0)?;
-    assert(ts.micros() == 0)?;
-    assert(ts.nanos() == 0)?;
+    assert!(ts.secs() == 0);
+    assert!(ts.millis() == 0);
+    assert!(ts.micros() == 0);
+    assert!(ts.nanos() == 0);
 }
 
 test("date_from_period midnight") {
@@ -40,5 +41,5 @@ test("date_from_period midnight") {
         Result::Ok(t) => t,
         Result::Err(_) => panic "epoch",
     };
-    assert(ts.nanos() != e.nanos())?;
+    assert!(ts.nanos() != e.nanos());
 }
