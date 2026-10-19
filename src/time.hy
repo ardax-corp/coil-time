@@ -381,7 +381,7 @@ fn parse_year(Vec<byte> text, int pos, int n) -> Result<IntPair, TimeError> {
 
 fn bytes_eq_at(Vec<byte> text, int pos, int n, string lit) -> bool {
     let lb = to_bytes(lit);
-    let ln = len(lb);
+    let ln = lb.len();
     if pos + ln > n {
         return false;
     }
@@ -397,7 +397,7 @@ fn bytes_eq_at(Vec<byte> text, int pos, int n, string lit) -> bool {
 
 fn expect_lit(Vec<byte> text, int pos, int n, string lit) -> Result<int, TimeError> {
     if bytes_eq_at(text, pos, n, lit) {
-        return pos + len(to_bytes(lit));
+        return pos + to_bytes(lit).len();
     }
     raise TimeError::ParseError;
 }
@@ -659,7 +659,7 @@ fn format_civil_rfc3339(Civil c) -> Result<string, TimeError> {
 
 fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeError> {
     let tb = to_bytes(text);
-    let n = len(tb);
+    let n = tb.len();
     let pair = parse_year(tb, 0, n)?;
     let year = pair.a;
     let i = expect_byte(tb, pair.b, n, 45)?;
@@ -876,7 +876,7 @@ fn format_spec(Civil c, int spec) -> Result<string, TimeError> {
 }
 
 fn append_bytes(Vec<byte> dest, Vec<byte> src) {
-    let n = len(src);
+    let n = src.len();
     let i = 0;
     while i < n {
         dest.push(src[i]);
@@ -887,7 +887,7 @@ fn append_bytes(Vec<byte> dest, Vec<byte> src) {
 fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
     let fb = to_bytes(fmt);
-    let n = len(fb);
+    let n = fb.len();
     let out: Vec<byte> = Vec::new();
     let i = 0;
     while i < n {
@@ -913,8 +913,8 @@ fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
 fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
     let tb = to_bytes(text);
     let fb = to_bytes(fmt);
-    let tn = len(tb);
-    let flen = len(fb);
+    let tn = tb.len();
+    let flen = fb.len();
     let ti = 0;
     let fi = 0;
     let year = 1970;
@@ -1041,7 +1041,7 @@ fn format_http_date(Timestamp ts) -> Result<string, TimeError> {
 
 fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError> {
     let tb = to_bytes(text);
-    let n = len(tb);
+    let n = tb.len();
     let pair = parse_weekday_name(tb, 0, n)?;
     let wd = pair.a;
     let i = expect_lit(tb, pair.b, n, ", ")?;
