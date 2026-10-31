@@ -1,6 +1,14 @@
-// Userland calendar and monotonic time. Process clocks are HostInvoke
-// `clock` (`wall_nanos` / `mono_nanos` / `sleep_ms`). Instant is a Coil
-// mono snapshot; calendar math stays in this package.
+// Wall-clock and monotonic time, UTC calendar math, and date formatting.
+//
+// `Timestamp` is a point in time since the Unix epoch (`timestamp`, `date`,
+// `epoch`); `Period` is a calendar-aware amount of time for `add` / `sub`;
+// `Instant` measures elapsed time on the monotonic clock (`instant_now`).
+// `format` / `parse` take `%Y-%m-%d`-style patterns, and the named helpers
+// read and write RFC 3339, ISO 8601, RFC 2822 and HTTP dates. Everything is
+// UTC; there are no time zones.
+//
+// Process clocks are the compiler's virtual `clock` module (`wall_nanos` /
+// `mono_nanos` / `sleep_ms`); the calendar math is plain Coil in this file.
 
 use clock::{wall_nanos, mono_nanos, sleep_ms as host_sleep_ms};
 use string::{format as sfmt, to_bytes, from_bytes};
@@ -23,17 +31,88 @@ const I32_MAX = 2147483647;
 const I32_MIN = -2147483648;
 
 // Pattern for `format` / `parse` (calendar date only; no zone).
+/// `format` / `parse` pattern for a calendar date, `YYYY-MM-DD` (no time, no zone).
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse, format, ISO8601_DATE};
+/// # use tests::assert;
+/// let ts = match parse("2024-07-04", ISO8601_DATE) {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// assert!((format(ts, ISO8601_DATE).ok() ?? "") == "2024-07-04");
+/// ```
 const ISO8601_DATE = "%Y-%m-%d";
 // Date-time body without fraction or zone. Use `format_iso8601` / `format_rfc3339` for `Z`.
+/// `format` / `parse` pattern for an ISO 8601 date-time body, `YYYY-MM-DDTHH:MM:SS`.
+///
+/// It has no fraction and no zone. Use `format_rfc3339` / `format_iso8601` for
+/// output with a `Z` suffix, and `parse_rfc3339` / `parse_iso8601` to read
+/// fractions and offsets.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse, format_rfc3339, ISO8601};
+/// # use tests::assert;
+/// let ts = match parse("2024-03-01T12:30:00", ISO8601) {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// assert!((format_rfc3339(ts).ok() ?? "") == "2024-03-01T12:30:00Z");
+/// ```
 const ISO8601 = "%Y-%m-%dT%H:%M:%S";
 
+/// Error returned by every fallible function in `time`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{sleep_ms, TimeError};
+/// # use tests::assert;
+/// let invalid = match sleep_ms(-1) {
+///     Result::Ok(_) => false,
+///     Result::Err(e) => match e {
+///         TimeError::InvalidInput => true,
+///         default => false,
+///     },
+/// };
+/// assert!(invalid);
+/// ```
 enum TimeError {
+    /// An argument is out of range: a negative sleep, a zero month or day, an
+    /// impossible date, an unknown `format` directive, or an `Instant` that was dropped.
     InvalidInput,
+    /// A result or an intermediate value does not fit in a 64-bit `int`.
     Overflow,
+    /// The text does not match the expected format, or names an impossible date or time.
     ParseError,
+    /// Any other failure, such as output that is not valid UTF-8.
     Other,
 }
 
+/// A point in time, measured from the Unix epoch (1970-01-01T00:00:00Z, UTC).
+///
+/// The same instant is available at four scales: `secs`, `millis`, `micros` and
+/// `nanos`. Coarser scales round toward negative infinity, so times before the
+/// epoch have negative values. A `Timestamp` has no time zone; formatting and
+/// calendar math are always in UTC.
+///
+/// Get one from `timestamp` (now), `date` (today at midnight), `epoch`, the
+/// `parse_*` functions, or `add` / `sub` on another `Timestamp`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_rfc3339, Timestamp};
+/// # use tests::assert;
+/// let secs = parse_rfc3339("2024-01-01T00:00:01.5Z").map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// assert!(secs == 1704067201);
+/// let millis = parse_rfc3339("2024-01-01T00:00:01.5Z").map(fn (Timestamp t) => t.millis()).unwrap_or(0);
+/// assert!(millis == 1704067201500);
+/// ```
 class Timestamp {
     secs: int,
     millis: int,
@@ -41,6 +120,34 @@ class Timestamp {
     nanos: int,
 }
 
+/// An amount of time as nine independent fields, from `years` down to `nanos`.
+///
+/// Fields are not normalized: `period(0, 0, 0, 0, 90, 0, 0, 0, 0)` stays ninety
+/// minutes and is not turned into an hour and a half. Any field may be negative.
+/// `add` applies `years` and `months` on the calendar first, then the fixed-length
+/// fields (days and smaller) as an exact number of nanoseconds.
+///
+/// Build one with `period`; combine with `period_add` / `period_sub`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{period, period_add};
+/// # use tests::assert;
+/// let day = match period(0, 0, 1, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let hours = match period(0, 0, 0, 6, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let total = match period_add(day, hours) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period_add",
+/// };
+/// assert!(total.days() == 1 && total.hours() == 6);
+/// ```
 class Period {
     years: int,
     months: int,
@@ -53,6 +160,22 @@ class Period {
     nanos: int,
 }
 
+/// A reading of the process's monotonic clock, for measuring elapsed time.
+///
+/// The monotonic clock never goes backwards and is not affected by changes to
+/// the wall clock, so use `Instant` (not `timestamp`) to time work. Take one
+/// with `instant_now` and read it with `elapsed_nanos` / `elapsed_millis`.
+/// After `drop`, elapsed reads return `TimeError::InvalidInput`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{instant_now, sleep_ms};
+/// # use tests::assert;
+/// let start = instant_now();
+/// sleep_ms(5).unwrap_or(());
+/// assert!(start.elapsed_millis().unwrap_or(0) >= 5);
+/// ```
 class Instant {
     snapshot: int,
     live: int,
@@ -737,11 +860,36 @@ fn parse_iso_datetime(string text, bool require_zone) -> Result<Timestamp, TimeE
     return out;
 }
 
+/// The current wall-clock time (UTC) as a `Timestamp`.
+///
+/// The wall clock can jump (NTP, manual changes); use `instant_now` to measure
+/// durations.
+///
+/// # Examples
+///
+/// ```
+/// use time::{timestamp, Timestamp};
+/// # use tests::assert;
+/// let secs = timestamp().map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// assert!(secs > 1704067200);
+/// ```
 fn timestamp() -> Result<Timestamp, TimeError> {
     let nanos = wall_nanos();
     return timestamp_from_nanos(nanos);
 }
 
+/// Block the current task for at least `millis` milliseconds.
+///
+/// `sleep_ms(0)` returns at once. A negative `millis` is `TimeError::InvalidInput`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{sleep_ms};
+/// # use tests::assert;
+/// assert!(sleep_ms(1).is_ok());
+/// assert!(sleep_ms(-1).is_err());
+/// ```
 fn sleep_ms(int millis) -> Result<(), TimeError> {
     if millis < 0 {
         raise TimeError::InvalidInput;
@@ -750,12 +898,25 @@ fn sleep_ms(int millis) -> Result<(), TimeError> {
     return ();
 }
 
+/// Take a monotonic clock reading now.
+///
+/// # Examples
+///
+/// ```
+/// use time::{instant_now, elapsed_nanos};
+/// # use tests::assert;
+/// let start = instant_now();
+/// assert!(elapsed_nanos(start).unwrap_or(-1) >= 0);
+/// ```
 fn instant_now() -> Instant {
     let snap = mono_nanos();
     let inst = new Instant(snap, 1);
     return inst;
 }
 
+/// Nanoseconds since `inst` was taken. Same as `inst.elapsed_nanos()`.
+///
+/// Returns `TimeError::InvalidInput` when `inst` was dropped.
 fn elapsed_nanos(Instant inst) -> Result<int, TimeError> {
     return match inst.elapsed_nanos() {
         Result::Ok(n) => n,
@@ -763,6 +924,9 @@ fn elapsed_nanos(Instant inst) -> Result<int, TimeError> {
     };
 }
 
+/// Whole milliseconds since `inst` was taken. Same as `inst.elapsed_millis()`.
+///
+/// Returns `TimeError::InvalidInput` when `inst` was dropped.
 fn elapsed_millis(Instant inst) -> Result<int, TimeError> {
     return match inst.elapsed_millis() {
         Result::Ok(n) => n,
@@ -770,21 +934,88 @@ fn elapsed_millis(Instant inst) -> Result<int, TimeError> {
     };
 }
 
+/// Build a `Period` from its nine fields, largest first.
+///
+/// Fields are stored as given (no normalization, negatives allowed). It always
+/// returns `Ok` today; the `Result` leaves room for validation.
+///
+/// # Examples
+///
+/// ```
+/// use time::{period, Period};
+/// # use tests::assert;
+/// let p = period(1, 2, 3, 0, 0, 0, 0, 0, 0);
+/// assert!(p.map(fn (Period p) => p.years() == 1 && p.months() == 2 && p.days() == 3).unwrap_or(false));
+/// ```
 fn period(int years, int months, int days, int hours, int minutes, int secs, int millis, int micros, int nanos) -> Result<Period, TimeError> {
     return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
 }
 
+/// `ts` moved forward by `p`.
+///
+/// `years` and `months` move the calendar date first (UTC), keeping the time of
+/// day; when the day does not exist in the target month it is clamped to the
+/// last day (Jan 31 plus one month is Feb 28 or 29). The remaining fields are
+/// then added as an exact duration. Returns `TimeError::Overflow` when the
+/// result does not fit.
+///
+/// # Examples
+///
+/// ```
+/// use time::{add, parse_iso8601_date, format_iso8601_date, period};
+/// # use tests::assert;
+/// let month = match period(0, 1, 0, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let jan31 = match parse_iso8601_date("2024-01-31") {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// let next = match add(jan31, month) {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "add",
+/// };
+/// assert!((format_iso8601_date(next).ok() ?? "") == "2024-02-29");
+/// ```
 fn add(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
     let out = apply_period(ts.nanos(), p)?;
     return timestamp_from_nanos(out);
 }
 
+/// `ts` moved back by `p`: `add` with every field of `p` negated.
+///
+/// Returns `TimeError::Overflow` when a field cannot be negated or the result
+/// does not fit.
+///
+/// # Examples
+///
+/// ```
+/// use time::{sub, parse_rfc3339, format_rfc3339, period};
+/// # use tests::assert;
+/// let day = match period(0, 0, 1, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let mar1 = match parse_rfc3339("2024-03-01T08:00:00Z") {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// let prev = match sub(mar1, day) {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "sub",
+/// };
+/// assert!((format_rfc3339(prev).ok() ?? "") == "2024-02-29T08:00:00Z");
+/// ```
 fn sub(Timestamp ts, Period p) -> Result<Timestamp, TimeError> {
     let neg = negate_period(p)?;
     let out = apply_period(ts.nanos(), neg)?;
     return timestamp_from_nanos(out);
 }
 
+/// Field-by-field sum of two periods (no normalization).
+///
+/// Returns `TimeError::Overflow` when any field overflows.
 fn period_add(Period a, Period b) -> Result<Period, TimeError> {
     // `?` on Result<int> drops Overflow; match/raise keeps the tag.
     let years = match add_i(a.years(), b.years()) {
@@ -802,6 +1033,9 @@ fn period_add(Period a, Period b) -> Result<Period, TimeError> {
     return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
 }
 
+/// Field-by-field difference `a - b` (no normalization).
+///
+/// Returns `TimeError::Overflow` when any field overflows.
 fn period_sub(Period a, Period b) -> Result<Period, TimeError> {
     let years = sub_i(a.years(), b.years())?;
     let months = sub_i(a.months(), b.months())?;
@@ -815,6 +1049,19 @@ fn period_sub(Period a, Period b) -> Result<Period, TimeError> {
     return new Period(years, months, days, hours, minutes, secs, millis, micros, nanos);
 }
 
+/// Today's date: the current wall-clock time truncated to midnight UTC.
+///
+/// # Examples
+///
+/// ```
+/// use time::{date, format};
+/// # use tests::assert;
+/// let today = match date() {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "date",
+/// };
+/// assert!((format(today, "%H:%M:%S").ok() ?? "") == "00:00:00");
+/// ```
 fn date() -> Result<Timestamp, TimeError> {
     let nanos = wall_nanos();
     let days = floor_div(nanos, NS_PER_DAY);
@@ -822,6 +1069,33 @@ fn date() -> Result<Timestamp, TimeError> {
     return timestamp_from_nanos(midnight);
 }
 
+/// Midnight UTC of the calendar date `p.years()`-`p.months()`-`p.days()`.
+///
+/// `p` is read as a year, month (1-12) and day (1-31); its smaller fields are
+/// ignored. A zero month or day, a month above 12 or a day past the month's end
+/// is `TimeError::InvalidInput`. A negative month or day, or a year outside the
+/// 32-bit range, is `TimeError::Overflow`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{date_from_period, period, format_iso8601_date};
+/// # use tests::assert;
+/// let leap_day = match period(2024, 2, 29, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let ts = match date_from_period(leap_day) {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "date_from_period",
+/// };
+/// assert!((format_iso8601_date(ts).ok() ?? "") == "2024-02-29");
+/// let no_such_day = match period(2023, 2, 29, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// assert!(date_from_period(no_such_day).is_err());
+/// ```
 fn date_from_period(Period p) -> Result<Timestamp, TimeError> {
     if p.years() < I32_MIN || p.years() > I32_MAX {
         raise TimeError::Overflow;
@@ -841,11 +1115,38 @@ fn date_from_period(Period p) -> Result<Timestamp, TimeError> {
     return timestamp_from_nanos(nanos);
 }
 
+/// The Unix epoch moved forward by `p`; same as `add(epoch, p)`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{date_from_epoch_period, period, Timestamp};
+/// # use tests::assert;
+/// let day = match period(0, 0, 1, 0, 0, 0, 0, 0, 0) {
+///     Result::Ok(p) => p,
+///     Result::Err(_) => panic "period",
+/// };
+/// let secs = date_from_epoch_period(day).map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// assert!(secs == 86400);
+/// ```
 fn date_from_epoch_period(Period p) -> Result<Timestamp, TimeError> {
     let out = apply_period(0, p)?;
     return timestamp_from_nanos(out);
 }
 
+/// The Unix epoch, 1970-01-01T00:00:00Z: a `Timestamp` with every scale at zero.
+///
+/// # Examples
+///
+/// ```
+/// use time::{epoch, format_rfc3339};
+/// # use tests::assert;
+/// let zero = match epoch() {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "epoch",
+/// };
+/// assert!((format_rfc3339(zero).ok() ?? "") == "1970-01-01T00:00:00Z");
+/// ```
 fn epoch() -> Result<Timestamp, TimeError> {
     return timestamp_from_nanos(0);
 }
@@ -884,6 +1185,25 @@ fn append_bytes(Vec<byte> dest, Vec<byte> src) {
     }
 }
 
+/// Format `ts` (in UTC) with a `strftime`-style pattern.
+///
+/// Directives: `%Y` year (at least four digits, `-` for years before 0),
+/// `%m` month, `%d` day, `%H` hour, `%M` minute, `%S` second (all two digits),
+/// and `%%` for a literal `%`. Every other byte is copied as is. Sub-second
+/// digits are not printed. An unknown directive or a trailing `%` is
+/// `TimeError::InvalidInput`. `ISO8601_DATE` and `ISO8601` are ready-made patterns.
+///
+/// # Examples
+///
+/// ```
+/// use time::{format, parse_rfc3339};
+/// # use tests::assert;
+/// let ts = match parse_rfc3339("2024-07-04T09:05:00Z") {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// assert!((format(ts, "%d/%m/%Y %H:%M (100%%)").ok() ?? "") == "04/07/2024 09:05 (100%)");
+/// ```
 fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
     let fb = to_bytes(fmt);
@@ -910,6 +1230,23 @@ fn format(Timestamp ts, string fmt) -> Result<string, TimeError> {
     };
 }
 
+/// Parse `text` as a UTC time laid out by the pattern `fmt`.
+///
+/// Accepts the same directives as `format`. `%Y` reads exactly four digits
+/// (with an optional leading `-`); the others read exactly two. Missing fields
+/// default to 1970-01-01 00:00:00. Literal bytes must match exactly and the whole
+/// of `text` must be consumed. Any mismatch, an unknown directive, or an
+/// impossible date or time is `TimeError::ParseError`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse, Timestamp};
+/// # use tests::assert;
+/// let secs = parse("2024-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// assert!(secs == 1704067200);
+/// assert!(parse("2024-02-30", "%Y-%m-%d").is_err());
+/// ```
 fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
     let tb = to_bytes(text);
     let fb = to_bytes(fmt);
@@ -997,43 +1334,119 @@ fn parse(string text, string fmt) -> Result<Timestamp, TimeError> {
     return ts;
 }
 
+/// Format `ts` as RFC 3339 in UTC, such as `2024-01-01T00:00:00Z`.
+///
+/// A non-zero sub-second part is printed as a fraction with trailing zeros
+/// removed (`2024-01-01T00:00:00.123Z`).
+///
+/// # Examples
+///
+/// ```
+/// use time::{format_rfc3339, parse_rfc3339};
+/// # use tests::assert;
+/// let ts = match parse_rfc3339("2024-01-15T12:30:00-05:00") {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// assert!((format_rfc3339(ts).ok() ?? "") == "2024-01-15T17:30:00Z");
+/// ```
 fn format_rfc3339(Timestamp ts) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
     let s = format_civil_rfc3339(c)?;
     return s;
 }
 
+/// Parse an RFC 3339 date-time, such as `2024-01-01T00:00:00Z`.
+///
+/// Accepts `T` or a space between date and time, an optional fraction of up to
+/// nine digits, and a zone of `Z`, `z` or `±HH:MM`. A missing zone, a
+/// colon-less offset, or any other mismatch is `TimeError::ParseError`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_rfc3339, Timestamp};
+/// # use tests::assert;
+/// let ms = parse_rfc3339("2024-01-01T00:00:00.250Z").map(fn (Timestamp t) => t.millis()).unwrap_or(0);
+/// assert!(ms == 1704067200250);
+/// assert!(parse_rfc3339("2024-01-01T00:00:00").is_err());
+/// ```
 fn parse_rfc3339(string text) -> Result<Timestamp, TimeError> {
     let ts = parse_iso_datetime(text, true)?;
     return ts;
 }
 
+/// Format `ts` as an ISO 8601 date-time in UTC; the output is the same as `format_rfc3339`.
 fn format_iso8601(Timestamp ts) -> Result<string, TimeError> {
     let s = format_rfc3339(ts)?;
     return s;
 }
 
+/// Parse an ISO 8601 date-time, such as `2024-06-08T09:10:11`.
+///
+/// Like `parse_rfc3339`, but the zone is optional (no zone means UTC) and an
+/// offset may be written `±HH:MM` or `±HHMM`. A bare date is
+/// `TimeError::ParseError`; use `parse_iso8601_date` for that.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_iso8601, Timestamp};
+/// # use tests::assert;
+/// let a = parse_iso8601("2024-06-08T09:10:11").map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// let b = parse_iso8601("2024-06-08T11:10:11+0200").map(fn (Timestamp t) => t.secs()).unwrap_or(1);
+/// assert!(a == b);
+/// ```
 fn parse_iso8601(string text) -> Result<Timestamp, TimeError> {
     let ts = parse_iso_datetime(text, false)?;
     return ts;
 }
 
+/// Format the UTC calendar date of `ts` as `YYYY-MM-DD`; the time of day is dropped.
 fn format_iso8601_date(Timestamp ts) -> Result<string, TimeError> {
     let s = format(ts, ISO8601_DATE)?;
     return s;
 }
 
+/// Parse a `YYYY-MM-DD` date as midnight UTC of that day.
+///
+/// Anything else, including a trailing time, is `TimeError::ParseError`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_iso8601_date, Timestamp};
+/// # use tests::assert;
+/// assert!(parse_iso8601_date("1970-01-02").map(fn (Timestamp t) => t.secs()).unwrap_or(0) == 86400);
+/// assert!(parse_iso8601_date("2024-01-01T00:00:00Z").is_err());
+/// ```
 fn parse_iso8601_date(string text) -> Result<Timestamp, TimeError> {
     let ts = parse(text, ISO8601_DATE)?;
     return ts;
 }
 
+/// Format `ts` as an RFC 2822 date in GMT, such as `Mon, 01 Jan 2024 00:00:00 GMT`.
+///
+/// The output is the IMF-fixdate form, so it is the same as `format_http_date`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{format_rfc2822, parse_rfc3339};
+/// # use tests::assert;
+/// let ts = match parse_rfc3339("1994-11-06T08:49:37Z") {
+///     Result::Ok(t) => t,
+///     Result::Err(_) => panic "parse",
+/// };
+/// assert!((format_rfc2822(ts).ok() ?? "") == "Sun, 06 Nov 1994 08:49:37 GMT");
+/// ```
 fn format_rfc2822(Timestamp ts) -> Result<string, TimeError> {
     let c = civil_from_nanos(ts.nanos())?;
     let wd = weekday_sun0(c.year, c.month, c.day);
     return weekday_name(wd) + ", " + pad2(c.day) + " " + month_name(c.month) + " " + year_text(c.year) + " " + pad2(c.hour) + ":" + pad2(c.minute) + ":" + pad2(c.second) + " GMT";
 }
 
+/// Format `ts` as an HTTP date (IMF-fixdate), such as `Sun, 06 Nov 1994 08:49:37 GMT`.
 fn format_http_date(Timestamp ts) -> Result<string, TimeError> {
     let s = format_rfc2822(ts)?;
     return s;
@@ -1100,73 +1513,116 @@ fn parse_rfc2822_text(string text, bool gmt_only) -> Result<Timestamp, TimeError
     return out;
 }
 
+/// Parse an RFC 2822 date, such as `Mon, 15 Jan 2024 12:30:00 -0500`.
+///
+/// The layout is `Www, DD Mon YYYY HH:MM:SS ZONE` with English three-letter
+/// names; the zone is `GMT`, `UT` or `±HHMM`. A weekday that does not match the
+/// date, or any other mismatch, is `TimeError::ParseError`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_rfc2822, parse_rfc3339, Timestamp};
+/// # use tests::assert;
+/// let a = parse_rfc2822("Mon, 15 Jan 2024 12:30:00 -0500").map(fn (Timestamp t) => t.secs()).unwrap_or(0);
+/// let b = parse_rfc3339("2024-01-15T17:30:00Z").map(fn (Timestamp t) => t.secs()).unwrap_or(1);
+/// assert!(a == b);
+/// ```
 fn parse_rfc2822(string text) -> Result<Timestamp, TimeError> {
     let ts = parse_rfc2822_text(text, false)?;
     return ts;
 }
 
+/// Parse an HTTP date (IMF-fixdate), such as `Sun, 06 Nov 1994 08:49:37 GMT`.
+///
+/// Like `parse_rfc2822`, but the zone must be `GMT`.
+///
+/// # Examples
+///
+/// ```
+/// use time::{parse_http_date};
+/// # use tests::assert;
+/// assert!(parse_http_date("Sun, 06 Nov 1994 08:49:37 GMT").is_ok());
+/// assert!(parse_http_date("Sun, 06 Nov 1994 08:49:37 -0500").is_err());
+/// ```
 fn parse_http_date(string text) -> Result<Timestamp, TimeError> {
     let ts = parse_rfc2822_text(text, true)?;
     return ts;
 }
 
 impl Timestamp {
+    /// Whole seconds since the epoch, rounded toward negative infinity.
     pub fn secs() -> int {
         return self.secs;
     }
 
+    /// Whole milliseconds since the epoch, rounded toward negative infinity.
     pub fn millis() -> int {
         return self.millis;
     }
 
+    /// Whole microseconds since the epoch, rounded toward negative infinity.
     pub fn micros() -> int {
         return self.micros;
     }
 
+    /// Nanoseconds since the epoch.
     pub fn nanos() -> int {
         return self.nanos;
     }
 }
 
 impl Period {
+    /// The `years` field.
     pub fn years() -> int {
         return self.years;
     }
 
+    /// The `months` field.
     pub fn months() -> int {
         return self.months;
     }
 
+    /// The `days` field.
     pub fn days() -> int {
         return self.days;
     }
 
+    /// The `hours` field.
     pub fn hours() -> int {
         return self.hours;
     }
 
+    /// The `minutes` field.
     pub fn minutes() -> int {
         return self.minutes;
     }
 
+    /// The `secs` field.
     pub fn secs() -> int {
         return self.secs;
     }
 
+    /// The `millis` field.
     pub fn millis() -> int {
         return self.millis;
     }
 
+    /// The `micros` field.
     pub fn micros() -> int {
         return self.micros;
     }
 
+    /// The `nanos` field.
     pub fn nanos() -> int {
         return self.nanos;
     }
 }
 
 impl Instant {
+    /// Nanoseconds since this reading was taken (never negative).
+    ///
+    /// Returns `TimeError::InvalidInput` after `drop`.
     pub fn elapsed_nanos() -> Result<int, TimeError> {
         if self.live == 0 {
             raise TimeError::InvalidInput;
@@ -1178,15 +1634,33 @@ impl Instant {
         return now - self.snapshot;
     }
 
+    /// Whole milliseconds since this reading was taken.
+    ///
+    /// Returns `TimeError::InvalidInput` after `drop`.
     pub fn elapsed_millis() -> Result<int, TimeError> {
         let ns = self.elapsed_nanos()?;
         return ns / NS_PER_MS;
     }
 
+    /// Whether this `Instant` can still be read, that is, `drop` has not been called.
     pub fn is_live() -> bool {
         return self.live != 0;
     }
 
+    /// Mark this `Instant` dead; later `elapsed_*` reads return `TimeError::InvalidInput`.
+    ///
+    /// Calling it again does nothing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use time::{instant_now};
+    /// # use tests::assert;
+    /// let start = instant_now();
+    /// start.drop();
+    /// assert!(!start.is_live());
+    /// assert!(start.elapsed_nanos().is_err());
+    /// ```
     fn drop() {
         self.live = 0;
     }
