@@ -15,4 +15,4 @@ test:
 coil-test: test
 
 clean:
-	rm -f *.hyc
+	rm -f *.ccoil *.hyc

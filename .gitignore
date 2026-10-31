@@ -2,6 +2,7 @@
 *.so
 *.dylib
 *.dll
+*.ccoil
 *.hyc
 target/
 coil.lock

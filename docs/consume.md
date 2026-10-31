@@ -15,7 +15,7 @@ This repo has no tags, so pin a commit with `--rev`. spool records the dep in `c
 Without spool, clone this repo next to your project and pass the root yourself. coil reads no `coil.toml` and no `coil.lock`. No `--allow-dload time`. No `--ffi-search-path`.
 
 ```bash
-coil --root ../coil-time/src main.hy
+coil --root ../coil-time/src main.coil
 ```
 
 Application code imports the Coil wrappers. It does not call `dload` or HostInvoke `clock_*` names itself.
@@ -42,7 +42,7 @@ inst.drop();
 
 `TimeError` tags: `InvalidInput`, `Overflow`, `ParseError`, `Other`.
 
-Shipped names in `src/time.hy`:
+Shipped names in `src/time.coil`:
 
 | Name | Notes |
 |------|--------|

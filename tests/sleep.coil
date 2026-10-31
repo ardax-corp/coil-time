@@ -1,4 +1,4 @@
-// sleep_ms: negative is InvalidInput. Zero is in tests/wiring.hy.
+// sleep_ms: negative is InvalidInput. Zero is in tests/wiring.coil.
 use time::{sleep_ms, TimeError};
 
 test("sleep_ms negative is InvalidInput") {
