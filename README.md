@@ -4,7 +4,36 @@ Userland calendar and monotonic time for [coil](https://github.com/ardax-corp/co
 
 The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `elapsed_nanos`, `elapsed_millis`, `period`, `add`, `sub`, `period_add`, `period_sub`, `date`, `date_from_period`, `date_from_epoch_period`, `epoch`, `format`, and `parse`. Instant adds `drop` so a snapshot can be marked dead. Elapsed after drop is `TimeError::InvalidInput`.
 
-RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso8601` / `parse_iso8601`, `format_iso8601_date` / `parse_iso8601_date`, `format_rfc2822` / `parse_rfc2822`, `format_http_date` / `parse_http_date`). The documented `format` / `parse` patterns are `%Y-%m-%d` (ISO date) and `%Y-%m-%dT%H:%M:%S` (date-time body, no zone).
+RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso8601` / `parse_iso8601`, `format_iso8601_date` / `parse_iso8601_date`, `format_rfc2822` / `parse_rfc2822`, `format_http_date` / `parse_http_date`). The documented `format` / `parse` patterns are `%Y-%m-%d` (ISO date, const `ISO8601_DATE`) and `%Y-%m-%dT%H:%M:%S` (date-time body, no zone, const `ISO8601`).
+
+## Example
+
+```coil
+use io::sync::{println};
+use time::{parse_rfc3339, format_rfc3339, format_http_date, add, period, TimeError};
+
+// One month after `text`, as RFC 3339 and as an HTTP date.
+fn next_month(string text) -> Result<string, TimeError> {
+    let ts = parse_rfc3339(text)?;
+    let later = add(ts, period(0, 1, 0, 0, 0, 0, 0, 0, 0)?)?;
+    return format_rfc3339(later)? + " / " + format_http_date(later)?;
+}
+
+fn main() {
+    let line = match next_month("2024-01-31T09:30:00+02:00") {
+        Result::Ok(s) => s,
+        Result::Err(_) => "bad date",
+    };
+    println(line)?;
+}
+```
+
+```bash
+coil --root ../coil-stdlib/src --root ../coil-time/src main.hy
+# 2024-02-29T07:30:00Z / Thu, 29 Feb 2024 07:30:00 GMT
+```
+
+Jan 31 plus one month clamps to the last day of February. Every item in `src/time.hy` carries `///` docs with runnable examples (`coil test src` runs them).
 
 ## Layout
 
