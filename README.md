@@ -2,7 +2,7 @@
 
 Userland calendar and monotonic time for [coil](https://github.com/ardax-corp/coil-lang). Process clocks (`wall_nanos`, `mono_nanos`, `sleep_ms`) are HostInvoke via virtual `clock`. This package is calendar, Instant snapshots, and format/parse. There is no cdylib.
 
-The sixteen names in `src/time.hy` are `timestamp`, `sleep_ms`, `instant_now`, `elapsed_nanos`, `elapsed_millis`, `period`, `add`, `sub`, `period_add`, `period_sub`, `date`, `date_from_period`, `date_from_epoch_period`, `epoch`, `format`, and `parse`. Instant adds `drop` so a snapshot can be marked dead. Elapsed after drop is `TimeError::InvalidInput`.
+The sixteen names in `src/time.coil` are `timestamp`, `sleep_ms`, `instant_now`, `elapsed_nanos`, `elapsed_millis`, `period`, `add`, `sub`, `period_add`, `period_sub`, `date`, `date_from_period`, `date_from_epoch_period`, `epoch`, `format`, and `parse`. Instant adds `drop` so a snapshot can be marked dead. Elapsed after drop is `TimeError::InvalidInput`.
 
 RFC presets are named helpers (`format_rfc3339` / `parse_rfc3339`, `format_iso8601` / `parse_iso8601`, `format_iso8601_date` / `parse_iso8601_date`, `format_rfc2822` / `parse_rfc2822`, `format_http_date` / `parse_http_date`). The documented `format` / `parse` patterns are `%Y-%m-%d` (ISO date, const `ISO8601_DATE`) and `%Y-%m-%dT%H:%M:%S` (date-time body, no zone, const `ISO8601`).
 
@@ -29,17 +29,17 @@ fn main() {
 ```
 
 ```bash
-coil --root ../coil-stdlib/src --root ../coil-time/src main.hy
+coil --root ../coil-stdlib/src --root ../coil-time/src main.coil
 # 2024-02-29T07:30:00Z / Thu, 29 Feb 2024 07:30:00 GMT
 ```
 
-Jan 31 plus one month clamps to the last day of February. Every item in `src/time.hy` carries `///` docs with runnable examples (`coil test src` runs them).
+Jan 31 plus one month clamps to the last day of February. Every item in `src/time.coil` carries `///` docs with runnable examples (`coil test src` runs them).
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `src/time.hy` | Package exports (`timestamp`, `period`, `Instant.drop`, …) |
+| `src/time.coil` | Package exports (`timestamp`, `period`, `Instant.drop`, …) |
 | `coil.toml` | `[package] name = "time"` |
 
 `use clock::{wall_nanos, mono_nanos, sleep_ms}` is the host edge. Instant is a Coil `int` mono snapshot plus a `live` flag. `elapsed_*` is `mono_now - start` in Coil.
